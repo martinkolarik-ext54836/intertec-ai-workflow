@@ -4,6 +4,8 @@
 
 - Added automatic external review for governed Class C features.
 - Added a macOS LaunchAgent that scans project state once per minute.
+- Bounded discovery to direct and one-level-nested project roots so background
+  scans never traverse repository contents or mounted data.
 - Added isolated commit review with `gpt-5.6-terra`, high reasoning, ephemeral
   Codex sessions, locking, deduplication, and stale-HEAD protection.
 - Added manual review, service status, installer, uninstaller, and a fake-Codex

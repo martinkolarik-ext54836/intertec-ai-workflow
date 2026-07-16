@@ -12,15 +12,12 @@ fi
 trap 'rm -rf "$worker_lock" >/dev/null 2>&1 || true' EXIT INT TERM
 
 log_review "SCAN projects_root=$PROJECTS_ROOT"
-while IFS= read -r state_file; do
+for state_file in \
+  "$PROJECTS_ROOT"/*/.ai/state/current.md \
+  "$PROJECTS_ROOT"/*/*/.ai/state/current.md; do
+  [ -f "$state_file" ] || continue
   repo="${state_file%/.ai/state/current.md}"
   status="$(state_value "$state_file" status | tr '[:upper:]' '[:lower:]')"
   [ "$status" = "waiting_for_external_review" ] || continue
   "$SCRIPT_DIR/review-one.sh" "$repo" || true
-done < <(
-  find "$PROJECTS_ROOT" -maxdepth 7 \
-    -path '*/.git' -prune -o \
-    -path '*/old/*' -prune -o \
-    -path '*/pen/share/*' -prune -o \
-    -type f -path '*/.ai/state/current.md' -print 2>/dev/null | sort
-)
+done

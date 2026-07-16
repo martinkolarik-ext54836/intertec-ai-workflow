@@ -41,8 +41,9 @@ but never replaces an existing `AGENTS.md`, `CLAUDE.md`, or `.ai/project.md`.
 
 ## Automatic external review
 
-The macOS LaunchAgent checks repositories once per minute. It reviews only
-governed features whose `.ai/state/current.md` contains:
+The macOS LaunchAgent checks repositories up to two directory levels below
+`/Users/martin/Projects` once per minute. It reviews only governed features
+whose `.ai/state/current.md` contains:
 
 ```yaml
 status: waiting_for_external_review

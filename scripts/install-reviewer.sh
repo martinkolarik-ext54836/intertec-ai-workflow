@@ -26,8 +26,6 @@ cat > "$PLIST" <<EOF
   <true/>
   <key>StartInterval</key>
   <integer>60</integer>
-  <key>ProcessType</key>
-  <string>Background</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key>

@@ -105,7 +105,7 @@ CODEX_BIN="$fake_codex" \
 REVIEW_SKIP_AUTH_CHECK=1 \
 REVIEW_AUTO_COMMIT=0 \
 REVIEW_NOTIFY=0 \
-  "$SCRIPT_DIR/review-one.sh" "$repo"
+  "$SCRIPT_DIR/review-worker.sh"
 
 review="$repo/.ai/reviews/$(date '+%Y-%m-%d')-review-fixture-external-review.md"
 test -s "$review"

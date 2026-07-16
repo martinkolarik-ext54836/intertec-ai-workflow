@@ -109,8 +109,9 @@ is sufficient; do not ask for duplicate approval.
 - Automatically resolve non-controversial findings. Escalate only changes to
   approved behavior, safety gates, accepted risks, or genuine product choices.
 
-For projects under `/Users/martin/Projects`, the installed review worker scans
-once per minute and acts only when all of these are true:
+For repositories up to two directory levels below `/Users/martin/Projects`, the
+installed review worker scans once per minute and acts only when all of these
+are true:
 
 - state is exactly `waiting_for_external_review`;
 - `implementation_commit` resolves to a commit and equals current `HEAD`;
