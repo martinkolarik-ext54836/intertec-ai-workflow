@@ -134,7 +134,14 @@ Manual trigger and service status:
 
 - PR creation requires explicit approval unless the user already requested the
   full PR workflow in the current task.
-- Merge and production deployment always require explicit approval.
+- Merge requires explicit approval. Approval or an explicit request to merge
+  also authorizes immediate production deployment of the merged commit; do not
+  stop for a second deployment approval.
+- After every successful merge, deploy automatically unless the user explicitly
+  says not to deploy. If the repository has no documented deploy command, report
+  deployment as unavailable rather than inventing one.
+- A standalone production deployment that does not follow an authorized merge
+  still requires explicit approval.
 - Use only the repository's documented deploy command.
 - Run the documented smoke check and record the deployed commit.
 - Archive completed state at `.ai/state/archive/YYYY-MM-DD-slug.md`.
@@ -172,12 +179,15 @@ Even after plan approval, stop before:
 - public/consumed API or persisted-schema changes not explicitly approved;
 - external messages, purchases, irreversible writes, or broad side effects;
 - broad refactors outside approved scope;
-- PR creation, merge, or deployment unless already explicitly requested;
+- PR creation or merge unless already explicitly requested;
+- standalone deployment unless explicitly requested; deployment immediately
+  following an authorized merge is already authorized by the delivery policy;
 - any unresolved user-visible product decision.
 
 An approved spec may explicitly authorize a schema, API, dependency, or config
-change. It does not implicitly authorize production deployment or destructive
-operations.
+change. It does not implicitly authorize standalone production deployment or
+destructive operations. Explicit merge authorization includes the post-merge
+deployment defined above.
 
 ## Git and worktree safety
 
