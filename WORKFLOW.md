@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.0.0
+Version: 1.1.0
 
 This is the canonical workflow for AI-assisted work in Martin's projects. It is
 tool-neutral and applies to Codex, Claude Code, and other coding agents.
@@ -91,12 +91,16 @@ is sufficient; do not ask for duplicate approval.
 5. Write `.ai/reviews/YYYY-MM-DD-slug-self-review.md`.
 6. Automatically fix non-controversial self-review findings and rerun checks.
 7. Commit the completed implementation when project policy allows it.
-8. Set state to `waiting_for_external_review` and record the commit SHA.
+8. Set state to `waiting_for_external_review` and record the exact commit SHA in
+   `implementation_commit`. This state update may remain uncommitted until the
+   automated reviewer records its report.
 
 #### External review phase
 
 - Review a committed SHA, not an uncommitted implementation.
-- Prefer a fresh session/model that did not build the feature.
+- Prefer a fresh session/model that did not build the feature. The local
+  automatic reviewer uses an ephemeral `gpt-5.6-terra` session with high
+  reasoning, isolated from the builder conversation.
 - Compare the committed diff with the approved spec and plan.
 - Run the same canonical checks and record actual results.
 - Save `.ai/reviews/YYYY-MM-DD-slug-external-review.md`.
@@ -104,6 +108,26 @@ is sufficient; do not ask for duplicate approval.
 - Verdict is `APPROVED`, `APPROVED_WITH_NOTES`, `CHANGES_REQUIRED`, or `BLOCKED`.
 - Automatically resolve non-controversial findings. Escalate only changes to
   approved behavior, safety gates, accepted risks, or genuine product choices.
+
+For projects under `/Users/martin/Projects`, the installed review worker scans
+once per minute and acts only when all of these are true:
+
+- state is exactly `waiting_for_external_review`;
+- `implementation_commit` resolves to a commit and equals current `HEAD`;
+- no review has already completed for that repository and SHA.
+
+The worker reviews the SHA in a disposable Git worktree. It never sends the
+builder conversation to the reviewer. It may run checks and create temporary
+artifacts only in that disposable worktree. It applies the report only if the
+project still points to the reviewed SHA, then updates state to
+`external_review_done`. Class A and Class B work never triggers this automation.
+
+Manual trigger and service status:
+
+```bash
+/Users/martin/Projects/.ai/scripts/review-now.sh /path/to/repository
+/Users/martin/Projects/.ai/scripts/reviewer-status.sh
+```
 
 #### Delivery phase
 

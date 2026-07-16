@@ -1,12 +1,13 @@
 # Current AI Workflow State
 
-workflow_version: 1.0.0
+workflow_version: 1.1.0
 feature_slug:
 class: C
 status: spec_created
 branch:
 base_commit:
 implementation_commit:
+reviewed_commit:
 spec:
 plan:
 self_review:

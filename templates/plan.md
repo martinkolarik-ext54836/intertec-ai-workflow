@@ -2,7 +2,7 @@
 
 Status: awaiting_plan_approval
 Spec: `.ai/specs/<date-slug>.md`
-Workflow version: 1.0.0
+Workflow version: 1.1.0
 
 ## Files
 
