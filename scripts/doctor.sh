@@ -32,6 +32,8 @@ while IFS= read -r git_dir; do
   fi
   if [ -f "$repo/.ai/project.md" ]; then
     echo "OK      project context: $repo"
+  elif git -C "$repo" cat-file -e main:.ai/project.md 2>/dev/null; then
+    echo "OK      project context on main (current branch not updated): $repo"
   else
     echo "WARN    no .ai/project.md: $repo"
     warnings=$((warnings + 1))
