@@ -16,7 +16,7 @@ Workflow version: 1.1.0
 # Discover from repository documentation before use.
 # full check
 # Discover from repository documentation before use.
-# deploy (requires explicit user approval)
+# deploy (automatic after an authorized merge; standalone use requires approval)
 # Discover from repository documentation before use.
 ```
 
@@ -32,7 +32,8 @@ Workflow version: 1.1.0
 - Auto-push feature branch: yes
 - PR requires explicit approval: yes
 - Merge requires explicit approval: yes
-- Deployment requires explicit approval: yes
+- Deploy automatically after an authorized merge: yes
+- Standalone deployment requires explicit approval: yes
 
 ## Production And Data Safety
 
