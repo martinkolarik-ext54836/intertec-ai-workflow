@@ -116,13 +116,12 @@ fi
 git -C "$repo" worktree prune >/dev/null 2>&1 || true
 git -C "$repo" worktree add --detach "$worktree" "$reviewed_sha" >/dev/null
 
-prompt="You are the independent external reviewer. Review only commit $reviewed_sha in this repository. Read /Users/martin/Projects/.ai/WORKFLOW.md, $spec_rel, $plan_rel, .ai/project.md when present, and the self-review referenced by state when present. Do not modify source files. You may run relevant checks in this disposable worktree. Focus on correctness, regressions, security, privacy, data loss, external side effects, compatibility, rollback, and missing tests. Ignore style-only preferences. Return one complete Markdown report following /Users/martin/Projects/.ai/templates/external-review.md. The report must contain exactly one verdict line using APPROVED, APPROVED_WITH_NOTES, CHANGES_REQUIRED, or BLOCKED. Use stable finding IDs and include true check outcomes; unavailable checks are NOT_RUN, never PASSED. Reviewed commit must be the full SHA $reviewed_sha."
+prompt="You are the independent external reviewer. Review only commit $reviewed_sha in this repository. Read /Users/martin/Projects/.ai/WORKFLOW.md, $spec_rel, $plan_rel, .ai/project.md when present, and the self-review referenced by state when present. Do not modify source files. You may run relevant checks in this disposable worktree. Focus on correctness, regressions, security, privacy, data loss, external side effects, compatibility, rollback, and missing tests. Ignore style-only preferences. The runner has already verified the live handoff state and exact implementation SHA; the workflow intentionally permits that state update to remain uncommitted, so do not report committed .ai/state/current.md handoff values as a finding. Return one complete Markdown report following /Users/martin/Projects/.ai/templates/external-review.md. The report must contain exactly one verdict line using APPROVED, APPROVED_WITH_NOTES, CHANGES_REQUIRED, or BLOCKED. Use stable finding IDs and include true check outcomes; unavailable checks are NOT_RUN, never PASSED. Reviewed commit must be the full SHA $reviewed_sha."
 
 log_review "START repo=$repo slug=$slug sha=$reviewed_sha model=$REVIEW_MODEL reasoning=$REVIEW_REASONING"
 rm -f "$result_file"
 set +e
-(cd "$worktree" && "$codex_bin" exec review \
-  --commit "$reviewed_sha" \
+(cd "$worktree" && "$codex_bin" exec \
   --model "$REVIEW_MODEL" \
   --ephemeral \
   -c "model_reasoning_effort=\"$REVIEW_REASONING\"" \
@@ -137,6 +136,7 @@ if [ "$codex_status" -ne 0 ] || [ ! -s "$result_file" ]; then
   notify_review "$slug" "External review zlyhalo."
   exit 5
 fi
+perl -pi -e 's/[ \t]+$//' "$result_file"
 if ! grep -Eq '^Verdict: (APPROVED|APPROVED_WITH_NOTES|CHANGES_REQUIRED|BLOCKED)[[:space:]]*$' "$result_file"; then
   log_review "ERROR repo=$repo reason=invalid-review-contract sha=$reviewed_sha"
   notify_review "$slug" "Review nemá platný verdict."
@@ -156,7 +156,7 @@ state_set "$state_file" external_review "$review_rel"
 state_set "$state_file" reviewed_commit "$reviewed_sha"
 state_set "$state_file" last_updated "$(date '+%Y-%m-%d')"
 
-verdict="$(awk -F': ' '/^Verdict: / {print $2; exit}' "$result_file")"
+verdict="$(awk -F': ' '/^Verdict: / {print $2; exit}' "$result_file" | sed 's/[[:space:]]*$//')"
 case "$verdict" in
   APPROVED|APPROVED_WITH_NOTES) next_action="AWAIT_PR_APPROVAL" ;;
   CHANGES_REQUIRED) next_action="FIX_FINDINGS" ;;

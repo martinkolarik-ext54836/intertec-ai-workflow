@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.1.0
+Version: 1.2.0
 
 This is the canonical workflow for AI-assisted work in Martin's projects. It is
 tool-neutral and applies to Codex, Claude Code, and other coding agents.
@@ -132,11 +132,14 @@ Manual trigger and service status:
 
 #### Delivery phase
 
-- PR creation requires explicit approval unless the user already requested the
-  full PR workflow in the current task.
-- Merge requires explicit approval. Approval or an explicit request to merge
-  also authorizes immediate production deployment of the merged commit; do not
-  stop for a second deployment approval.
+- Approval to implement a requested change authorizes its complete delivery
+  lifecycle after all required checks and reviews pass: commit, push, PR
+  creation, merge, and production deployment. Do not ask separate PR, merge,
+  or deployment approval questions unless the user explicitly limited the task
+  to an earlier stage.
+- For Class C work, create and merge the PR automatically only after external
+  review returns `APPROVED` or `APPROVED_WITH_NOTES` and no required finding
+  remains open.
 - After every successful merge, deploy automatically unless the user explicitly
   says not to deploy. If the repository has no documented deploy command, report
   deployment as unavailable rather than inventing one.
@@ -179,15 +182,16 @@ Even after plan approval, stop before:
 - public/consumed API or persisted-schema changes not explicitly approved;
 - external messages, purchases, irreversible writes, or broad side effects;
 - broad refactors outside approved scope;
-- PR creation or merge unless already explicitly requested;
+- PR creation, merge, and the documented post-merge deployment are authorized
+  by approval to implement unless the user explicitly restricted delivery;
 - standalone deployment unless explicitly requested; deployment immediately
   following an authorized merge is already authorized by the delivery policy;
 - any unresolved user-visible product decision.
 
 An approved spec may explicitly authorize a schema, API, dependency, or config
-change. It does not implicitly authorize standalone production deployment or
-destructive operations. Explicit merge authorization includes the post-merge
-deployment defined above.
+change. It does not implicitly authorize destructive operations or an unrelated
+standalone production deployment. Approval to implement includes the normal
+post-review PR, merge, and deployment lifecycle defined above.
 
 ## Git and worktree safety
 
