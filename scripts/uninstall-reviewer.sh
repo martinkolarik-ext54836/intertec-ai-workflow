@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLIST="$HOME/Library/LaunchAgents/sk.intertec.ai-reviewer.plist"
 DOMAIN="gui/$(id -u)"
-LABEL="sk.intertec.ai-reviewer"
+LABEL="${REVIEW_SERVICE_LABEL:-sk.intertec.ai-reviewer}"
+PLIST="${REVIEW_SERVICE_PLIST:-$HOME/Library/LaunchAgents/$LABEL.plist}"
 
 launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 if [ -f "$PLIST" ]; then

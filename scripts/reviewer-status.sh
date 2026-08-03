@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/review-common.sh"
 
 DOMAIN="gui/$(id -u)"
-LABEL="sk.intertec.ai-reviewer"
+LABEL="${REVIEW_SERVICE_LABEL:-sk.intertec.ai-reviewer}"
 
 echo "Service: $LABEL"
 if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then

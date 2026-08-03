@@ -1,12 +1,12 @@
 # Shared AI Workflow Entry Point
 
-These instructions apply to repositories under `/Users/martin/Projects`.
+These instructions apply to repositories under `__PROJECTS_ROOT__`.
 
-Before acting, read `/Users/martin/Projects/.ai/WORKFLOW.md` completely. Use its
+Before acting, read `__WORKFLOW_PATH__` completely. Use its
 three work classes and the lightest safe workflow. Then read the nearest
 repository `.ai/project.md` and any more specific `AGENTS.md`.
 
-Shared workflow configuration belongs in `Projects/.ai`. Project architecture,
+Shared workflow configuration belongs in `__WORKFLOW_ROOT__`. Project architecture,
 commands, specs, plans, reviews, state, and deployment history belong in the
 repository that owns the code.
 

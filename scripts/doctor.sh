@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+AI_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECTS_ROOT="${PROJECTS_ROOT:-$(cd "$AI_ROOT/.." && pwd)}"
 errors=0
 warnings=0
 
@@ -14,20 +15,19 @@ check_file() {
   fi
 }
 
-check_file "$PROJECTS_ROOT/.ai/WORKFLOW.md"
-check_file "$PROJECTS_ROOT/.ai/VERSION"
+check_file "$AI_ROOT/WORKFLOW.md"
+check_file "$AI_ROOT/VERSION"
 check_file "$PROJECTS_ROOT/AGENTS.md"
 check_file "$PROJECTS_ROOT/CLAUDE.md"
 
 while IFS= read -r git_dir; do
   repo="${git_dir%/.git}"
   case "$repo" in
-    "$PROJECTS_ROOT/.ai"|"$PROJECTS_ROOT/old/"*|"$PROJECTS_ROOT/pen/share/"*)
+    "$AI_ROOT")
       continue
       ;;
   esac
-  origin="$(git -C "$repo" remote get-url origin 2>/dev/null || true)"
-  if [ -n "$origin" ] && [[ "$origin" != *martinkolarik* ]] && [[ "$origin" != *topanka2000* ]]; then
+  if [ -n "${AI_DOCTOR_IGNORE_REGEX:-}" ] && printf '%s\n' "$repo" | grep -Eq "$AI_DOCTOR_IGNORE_REGEX"; then
     continue
   fi
   if [ -f "$repo/.ai/project.md" ]; then

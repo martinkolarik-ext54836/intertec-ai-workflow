@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-test_root="$(mktemp -d /tmp/intertec-ai-review-test.XXXXXX)"
+test_root="$(mktemp -d /tmp/shared-ai-review-test.XXXXXX)"
 test_root="$(cd "$test_root" && pwd -P)"
 repo="$test_root/project"
 runtime="$test_root/runtime"
@@ -33,7 +33,7 @@ EOF
 cat > "$repo/.ai/state/current.md" <<'EOF'
 # Current AI Workflow State
 
-workflow_version: 1.1.0
+workflow_version: 1.2.0
 feature_slug: review-fixture
 class: C
 status: implementing
