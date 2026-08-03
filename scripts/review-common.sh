@@ -118,7 +118,11 @@ state_value_any() {
 }
 
 repo_id() {
-  printf '%s' "$1" | shasum -a 256 | awk '{print substr($1, 1, 16)}'
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | awk '{print substr($1, 1, 16)}'
+  else
+    printf '%s' "$1" | sha256sum | awk '{print substr($1, 1, 16)}'
+  fi
 }
 
 find_codex() {

@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.2.0
+Version: 1.3.0
 
 This is the canonical workflow for AI-assisted work in a shared projects
 directory. It is tool-neutral and applies to Codex, Claude Code, and other
@@ -133,6 +133,13 @@ Manual trigger and service status:
 ```bash
 <workflow-root>/scripts/review-now.sh /path/to/repository
 <workflow-root>/scripts/reviewer-status.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+<workflow-root>\scripts\review-now-windows.ps1 -Repository C:\path\to\repository
+<workflow-root>\scripts\reviewer-status-windows.ps1
 ```
 
 #### Delivery phase

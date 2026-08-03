@@ -33,7 +33,7 @@ EOF
 cat > "$repo/.ai/state/current.md" <<'EOF'
 # Current AI Workflow State
 
-workflow_version: 1.2.0
+workflow_version: 1.3.0
 feature_slug: review-fixture
 class: C
 status: implementing

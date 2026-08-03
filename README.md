@@ -32,7 +32,8 @@ Install the repository as `.ai` directly under a directory containing projects:
 ├── AGENTS.md            # generated root adapter for Codex
 ├── CLAUDE.md            # generated root adapter for Claude Code
 ├── project-a/
-│   ├── AGENTS.md
+│   ├── AGENTS.md        # project adapter for Codex
+│   ├── CLAUDE.md        # project adapter for Claude Code
 │   └── .ai/
 │       ├── project.md
 │       ├── specs/
@@ -40,6 +41,10 @@ Install the repository as `.ai` directly under a directory containing projects:
 │       ├── reviews/
 │       └── state/
 └── project-b/
+    ├── AGENTS.md
+    ├── CLAUDE.md
+    └── .ai/
+        └── project.md
 ```
 
 Shared policy stays in this repository. Architecture, commands, decisions,
@@ -57,7 +62,7 @@ Core workflow:
 
 Optional automatic reviewer:
 
-- macOS with `launchd`
+- macOS with `launchd`, or Windows with Task Scheduler and Git for Windows
 - Codex CLI installed and authenticated through ChatGPT
 - access to the configured review model
 
@@ -184,9 +189,9 @@ AI_DOCTOR_IGNORE_REGEX='/vendor/|/archive/' ./scripts/doctor.sh
 
 ## Optional automatic external review
 
-The reviewer is not required to use the core workflow. On macOS, it can scan
-repositories directly below `<projects-root>` or one directory deeper once per
-minute. It acts only when `.ai/state/current.md` contains both:
+The reviewer is not required to use the core workflow. On macOS and Windows, it
+can scan repositories directly below `<projects-root>` or one directory deeper
+once per minute. It acts only when `.ai/state/current.md` contains both:
 
 ```yaml
 status: waiting_for_external_review
@@ -198,6 +203,8 @@ Before installing it, verify the Codex CLI login:
 ```bash
 codex login status
 ```
+
+### macOS (`launchd`)
 
 Install with the default model and reasoning level:
 
@@ -219,6 +226,41 @@ Operate the reviewer:
 ./scripts/review-now.sh /path/to/repository
 ./scripts/uninstall-reviewer.sh
 ```
+
+### Windows (Task Scheduler)
+
+Install Git for Windows and run these commands from PowerShell. The installer
+uses Git Bash for the shared review engine and registers a per-user scheduled
+task; administrator rights are not required. Like the macOS user LaunchAgent,
+the task runs only while that user is signed in.
+
+```powershell
+cd "$env:USERPROFILE\Projects\.ai"
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install-reviewer-windows.ps1
+```
+
+To select another project root, model, or reasoning level:
+
+```powershell
+.\scripts\install-reviewer-windows.ps1 `
+  -ProjectsRoot "D:\Projects" `
+  -Model "gpt-5.6-terra" `
+  -Reasoning "high"
+```
+
+Operate the Windows reviewer:
+
+```powershell
+.\scripts\reviewer-status-windows.ps1
+.\scripts\review-now-windows.ps1 -Repository "D:\Projects\my-project"
+.\scripts\uninstall-reviewer-windows.ps1
+```
+
+The Windows installer stores non-secret settings, logs, locks, and completed
+review markers under `%LOCALAPPDATA%\SharedAIReviewer`. It stores no ChatGPT
+credentials or API keys. Set `BASH_EXE` before installation only when Git Bash
+is installed in a non-standard location.
 
 The reviewer:
 
@@ -244,10 +286,16 @@ git pull --ff-only
 ```
 
 If automatic review is installed and reviewer scripts or settings changed,
-refresh its service definition:
+refresh its service definition. On macOS run:
 
 ```bash
 ./scripts/install-reviewer.sh
+```
+
+On Windows run:
+
+```powershell
+.\scripts\install-reviewer-windows.ps1
 ```
 
 Existing project `.ai/project.md` files are intentionally not overwritten by an
@@ -257,8 +305,11 @@ upgrade. Compare them with `templates/project.md` when adopting new fields.
 
 - **Agent ignores the workflow:** confirm the root and project instruction files
   exist and run `./scripts/doctor.sh`.
-- **Reviewer does not start:** run `./scripts/reviewer-status.sh`, then inspect
-  the printed runtime and log locations.
+- **Reviewer does not start:** run `./scripts/reviewer-status.sh` on macOS or
+  `.\scripts\reviewer-status-windows.ps1` on Windows, then inspect the printed
+  runtime and log locations.
+- **Git Bash is not found on Windows:** install Git for Windows or set
+  `BASH_EXE` to its `bash.exe` before running the installer.
 - **Review is skipped:** verify that state is exactly
   `waiting_for_external_review`, `implementation_commit` equals `git rev-parse
   HEAD`, and the spec and plan are committed under `.ai/`.

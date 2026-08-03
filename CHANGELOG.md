@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0 - 2026-08-03
+
+- Added a Windows Task Scheduler installer, status command, manual review
+  command, and uninstaller for the optional automatic reviewer.
+- Reused the same Git Bash review engine on Windows so commit validation,
+  locking, disposable worktrees, and stale-result protection remain identical
+  across supported operating systems.
+- Documented both project-level agent adapters in the recommended directory
+  structure.
+- Updated project and state templates to workflow version 1.3.0.
+
 ## 1.2.0 - 2026-08-03
 
 - Made the workflow repository portable across users and project roots instead

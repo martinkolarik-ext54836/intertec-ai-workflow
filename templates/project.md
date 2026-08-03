@@ -2,7 +2,7 @@
 
 Project: <name>
 Repository: <remote or local path>
-Workflow version: 1.2.0
+Workflow version: 1.3.0
 
 ## Architecture
 
