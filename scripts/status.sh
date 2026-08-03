@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PROJECT="${1:-$PWD}"
+AI_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(git -C "$PROJECT" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$ROOT" ]; then
   echo "Not a Git repository: $PROJECT" >&2
@@ -9,7 +10,7 @@ if [ -z "$ROOT" ]; then
 fi
 
 echo "Repository: $ROOT"
-echo "Workflow: $(cat /Users/martin/Projects/.ai/VERSION)"
+echo "Workflow: $(cat "$AI_ROOT/VERSION")"
 echo "Branch: $(git -C "$ROOT" branch --show-current 2>/dev/null || echo unknown)"
 echo
 echo "Git status:"

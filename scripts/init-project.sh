@@ -35,7 +35,7 @@ if [ ! -f "$REPO_ROOT/AGENTS.md" ]; then
   cat > "$REPO_ROOT/AGENTS.md" <<'EOF'
 # Repository AI Instructions
 
-When working locally, follow `/Users/martin/Projects/.ai/WORKFLOW.md`.
+When working locally, follow `__WORKFLOW_PATH__`.
 Always read `.ai/project.md` for repository-specific commands and constraints.
 Keep specs, plans, reviews, and workflow state inside this repository's `.ai/`.
 
@@ -43,6 +43,8 @@ If the shared workflow is unavailable, preserve user changes, use the lightest
 safe workflow, require a plan approval for features or risky changes, run the
 documented checks, and require explicit approval before PR, merge, or deploy.
 EOF
+  WORKFLOW_PATH="$SHARED_ROOT/WORKFLOW.md" \
+    perl -0pi -e 's/__WORKFLOW_PATH__/$ENV{WORKFLOW_PATH}/g' "$REPO_ROOT/AGENTS.md"
   echo "Created AGENTS.md"
 else
   echo "Kept existing AGENTS.md"
@@ -52,11 +54,13 @@ if [ ! -f "$REPO_ROOT/CLAUDE.md" ]; then
   cat > "$REPO_ROOT/CLAUDE.md" <<'EOF'
 # Repository AI Instructions
 
-@/Users/martin/Projects/.ai/WORKFLOW.md
+@__WORKFLOW_PATH__
 @.ai/project.md
 
 Project feature artifacts remain in this repository's `.ai/` directory.
 EOF
+  WORKFLOW_PATH="$SHARED_ROOT/WORKFLOW.md" \
+    perl -0pi -e 's/__WORKFLOW_PATH__/$ENV{WORKFLOW_PATH}/g' "$REPO_ROOT/CLAUDE.md"
   echo "Created CLAUDE.md"
 else
   echo "Kept existing CLAUDE.md"

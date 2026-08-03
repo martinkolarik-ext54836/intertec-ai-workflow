@@ -3,10 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AI_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PLIST="$HOME/Library/LaunchAgents/sk.intertec.ai-reviewer.plist"
-LOG_ROOT="$HOME/Library/Logs/IntertecAIReviewer"
 DOMAIN="gui/$(id -u)"
-LABEL="sk.intertec.ai-reviewer"
+LABEL="${REVIEW_SERVICE_LABEL:-sk.intertec.ai-reviewer}"
+PLIST="${REVIEW_SERVICE_PLIST:-$HOME/Library/LaunchAgents/$LABEL.plist}"
+LOG_ROOT="${REVIEW_LOG_ROOT:-$HOME/Library/Logs/IntertecAIReviewer}"
+REVIEW_MODEL="${REVIEW_MODEL:-gpt-5.6-terra}"
+REVIEW_REASONING="${REVIEW_REASONING:-high}"
 
 mkdir -p "$(dirname "$PLIST")" "$LOG_ROOT"
 
@@ -35,9 +37,9 @@ cat > "$PLIST" <<EOF
     <key>PROJECTS_ROOT</key>
     <string>$(cd "$AI_ROOT/.." && pwd)</string>
     <key>REVIEW_MODEL</key>
-    <string>gpt-5.6-terra</string>
+    <string>$REVIEW_MODEL</string>
     <key>REVIEW_REASONING</key>
-    <string>high</string>
+    <string>$REVIEW_REASONING</string>
   </dict>
   <key>StandardOutPath</key>
   <string>$LOG_ROOT/launchd.out.log</string>
@@ -53,7 +55,7 @@ launchctl bootstrap "$DOMAIN" "$PLIST"
 launchctl kickstart -k "$DOMAIN/$LABEL"
 
 echo "Installed and started $LABEL"
-echo "Model: gpt-5.6-terra"
-echo "Reasoning: high"
+echo "Model: $REVIEW_MODEL"
+echo "Reasoning: $REVIEW_REASONING"
 echo "Interval: 60 seconds"
 echo "Status: $AI_ROOT/scripts/reviewer-status.sh"

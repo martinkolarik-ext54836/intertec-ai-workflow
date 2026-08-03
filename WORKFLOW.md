@@ -2,8 +2,13 @@
 
 Version: 1.2.0
 
-This is the canonical workflow for AI-assisted work in Martin's projects. It is
-tool-neutral and applies to Codex, Claude Code, and other coding agents.
+This is the canonical workflow for AI-assisted work in a shared projects
+directory. It is tool-neutral and applies to Codex, Claude Code, and other
+coding agents.
+
+In this document, `<workflow-root>` means the directory containing this file
+and `<projects-root>` means its parent directory. The recommended checkout path
+is `<projects-root>/.ai`.
 
 ## Instruction order
 
@@ -98,9 +103,9 @@ is sufficient; do not ask for duplicate approval.
 #### External review phase
 
 - Review a committed SHA, not an uncommitted implementation.
-- Prefer a fresh session/model that did not build the feature. The local
-  automatic reviewer uses an ephemeral `gpt-5.6-terra` session with high
-  reasoning, isolated from the builder conversation.
+- Prefer a fresh session/model that did not build the feature. The optional
+  local automatic reviewer uses an ephemeral, separately configured Codex
+  session isolated from the builder conversation.
 - Compare the committed diff with the approved spec and plan.
 - Run the same canonical checks and record actual results.
 - Save `.ai/reviews/YYYY-MM-DD-slug-external-review.md`.
@@ -109,9 +114,9 @@ is sufficient; do not ask for duplicate approval.
 - Automatically resolve non-controversial findings. Escalate only changes to
   approved behavior, safety gates, accepted risks, or genuine product choices.
 
-For repositories up to two directory levels below `/Users/martin/Projects`, the
-installed review worker scans once per minute and acts only when all of these
-are true:
+For repositories up to two directory levels below `<projects-root>`, the
+optional installed review worker scans once per minute and acts only when all
+of these are true:
 
 - state is exactly `waiting_for_external_review`;
 - `implementation_commit` resolves to a commit and equals current `HEAD`;
@@ -126,8 +131,8 @@ project still points to the reviewed SHA, then updates state to
 Manual trigger and service status:
 
 ```bash
-/Users/martin/Projects/.ai/scripts/review-now.sh /path/to/repository
-/Users/martin/Projects/.ai/scripts/reviewer-status.sh
+<workflow-root>/scripts/review-now.sh /path/to/repository
+<workflow-root>/scripts/reviewer-status.sh
 ```
 
 #### Delivery phase
@@ -211,6 +216,18 @@ post-review PR, merge, and deployment lifecycle defined above.
 - Sanitize logs, screenshots, fixtures, and review evidence.
 - Production writes must be intentional, scoped, and explicitly authorized.
 
+## External design tools are opt-in only
+
+- Use Figma or another external design workspace only when the user explicitly
+  requests that tool or supplies its design as an input/reference.
+- A frontend, UI, styling, layout, component, or visual code change does not by
+  itself authorize or require Figma.
+- Never add a Figma deliverable to a spec, plan, completion contract, review
+  gate, merge gate, or deployment gate unless the user explicitly requested it.
+- If a generic tool instruction recommends Figma for UI work but the user did
+  not request Figma, follow this project workflow and complete the code change
+  without Figma.
+
 ## Checks and reporting
 
 - Prefer one canonical check script declared by `.ai/project.md`.
@@ -223,7 +240,7 @@ post-review PR, merge, and deployment lifecycle defined above.
 
 ## Project-local artifacts
 
-Shared policy and templates live in `/Users/martin/Projects/.ai`. The following
+Shared policy and templates live in `<workflow-root>`. The following
 always belong to the repository that owns the change:
 
 - `.ai/project.md`
