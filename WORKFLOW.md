@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.3.0
+Version: 1.4.0
 
 This is the canonical workflow for AI-assisted work in a shared projects
 directory. It is tool-neutral and applies to Codex, Claude Code, and other

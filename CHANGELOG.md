@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 - 2026-08-09
+
+- Bounded automatic reviewer failures to three attempts by default, with
+  visible give-up markers and deliberate manual retry support.
+- Mapped `CHANGES_REQUIRED` and `BLOCKED` verdicts to the corresponding
+  `changes_required` and `blocked` workflow states.
+- Added CI for Bash syntax, ShellCheck, and expanded reviewer automation tests
+  covering failure limits, manual retries, verdict state, and auto-commit
+  safety.
+
 ## 1.3.0 - 2026-08-03
 
 - Added a Windows Task Scheduler installer, status command, manual review
