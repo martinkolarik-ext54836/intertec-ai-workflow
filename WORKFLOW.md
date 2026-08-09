@@ -126,7 +126,8 @@ The worker reviews the SHA in a disposable Git worktree. It never sends the
 builder conversation to the reviewer. It may run checks and create temporary
 artifacts only in that disposable worktree. It applies the report only if the
 project still points to the reviewed SHA, then updates state to
-`external_review_done`. Class A and Class B work never triggers this automation.
+`external_review_done`, `changes_required`, or `blocked` according to the
+verdict. Class A and Class B work never triggers this automation.
 
 Manual trigger and service status:
 
@@ -174,6 +175,7 @@ plans that will become stale.
 - `awaiting_plan_approval`
 - `implementing`
 - `changes_required`
+- `blocked`
 - `waiting_for_external_review`
 - `external_review_done`
 - `awaiting_pr_approval`

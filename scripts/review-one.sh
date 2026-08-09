@@ -183,17 +183,26 @@ fi
 
 mkdir -p "$repo/$(dirname "$review_rel")"
 cp "$result_file" "$repo/$review_rel"
-state_set "$state_file" status external_review_done
-state_set "$state_file" external_review "$review_rel"
-state_set "$state_file" reviewed_commit "$reviewed_sha"
-state_set "$state_file" last_updated "$(date '+%Y-%m-%d')"
 
 verdict="$(awk -F': ' '/^Verdict: / {print $2; exit}' "$result_file" | sed 's/[[:space:]]*$//')"
 case "$verdict" in
-  APPROVED|APPROVED_WITH_NOTES) next_action="AWAIT_PR_APPROVAL" ;;
-  CHANGES_REQUIRED) next_action="FIX_FINDINGS" ;;
-  BLOCKED) next_action="RESOLVE_REVIEW_BLOCKER" ;;
+  APPROVED|APPROVED_WITH_NOTES)
+    review_status="external_review_done"
+    next_action="AWAIT_PR_APPROVAL"
+    ;;
+  CHANGES_REQUIRED)
+    review_status="changes_required"
+    next_action="FIX_FINDINGS"
+    ;;
+  BLOCKED)
+    review_status="blocked"
+    next_action="RESOLVE_REVIEW_BLOCKER"
+    ;;
 esac
+state_set "$state_file" status "$review_status"
+state_set "$state_file" external_review "$review_rel"
+state_set "$state_file" reviewed_commit "$reviewed_sha"
+state_set "$state_file" last_updated "$(date '+%Y-%m-%d')"
 state_set "$state_file" next_action "$next_action"
 
 if [ "${REVIEW_AUTO_COMMIT:-1}" = "1" ]; then
