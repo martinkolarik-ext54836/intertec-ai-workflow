@@ -28,6 +28,18 @@ if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
     Write-Host "Projects: $($config.ProjectsRoot)"
     Write-Host "Runtime: $($config.RuntimeRoot)"
     Write-Host "Logs: $($config.LogRoot)"
+    Write-Host ""
+    Write-Host "Give-up entries:"
+    $failureDirectory = Join-Path ([string]$config.RuntimeRoot) "failures"
+    $giveupEntries = @(Get-ChildItem -LiteralPath $failureDirectory -Filter "*.giveup" -File -ErrorAction SilentlyContinue)
+    if ($giveupEntries.Count -gt 0) {
+        foreach ($entry in $giveupEntries | Sort-Object Name) {
+            Write-Host $entry.Name
+            Get-Content -LiteralPath $entry.FullName | ForEach-Object { Write-Host "  $_" }
+        }
+    } else {
+        Write-Host "none"
+    }
 }
 
 $schedulerLog = Join-Path (Split-Path -Parent $ConfigPath) "task-scheduler.log"

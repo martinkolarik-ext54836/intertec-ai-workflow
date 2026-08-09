@@ -22,6 +22,19 @@ echo "Reasoning: $REVIEW_REASONING"
 echo "Runtime: $RUNTIME_ROOT"
 echo "Logs: $LOG_ROOT"
 echo
+echo "Give-up entries:"
+giveup_entries="$(find "$RUNTIME_ROOT/failures" -maxdepth 1 -type f -name '*.giveup' -print 2>/dev/null | sort)"
+if [ -n "$giveup_entries" ]; then
+  while IFS= read -r giveup_file; do
+    echo "${giveup_file##*/}"
+    sed 's/^/  /' "$giveup_file"
+  done <<EOF
+$giveup_entries
+EOF
+else
+  echo "none"
+fi
+echo
 echo "Recent activity:"
 if [ -f "$LOG_ROOT/reviewer.log" ]; then
   tail -n 20 "$LOG_ROOT/reviewer.log"

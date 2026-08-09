@@ -6,9 +6,14 @@ RUNTIME_ROOT="${REVIEW_RUNTIME_ROOT:-$HOME/Library/Application Support/IntertecA
 LOG_ROOT="${REVIEW_LOG_ROOT:-$HOME/Library/Logs/IntertecAIReviewer}"
 REVIEW_MODEL="${REVIEW_MODEL:-gpt-5.6-terra}"
 REVIEW_REASONING="${REVIEW_REASONING:-high}"
+REVIEW_MAX_ATTEMPTS="${REVIEW_MAX_ATTEMPTS:-3}"
+case "$REVIEW_MAX_ATTEMPTS" in
+  ''|*[!0-9]*|0) REVIEW_MAX_ATTEMPTS=3 ;;
+esac
 
 mkdir -p "$RUNTIME_ROOT/locks" "$RUNTIME_ROOT/completed" \
-  "$RUNTIME_ROOT/results" "$RUNTIME_ROOT/worktrees" "$LOG_ROOT"
+  "$RUNTIME_ROOT/failures" "$RUNTIME_ROOT/results" \
+  "$RUNTIME_ROOT/worktrees" "$LOG_ROOT"
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'

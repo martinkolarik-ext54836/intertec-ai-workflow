@@ -19,5 +19,5 @@ for state_file in \
   repo="${state_file%/.ai/state/current.md}"
   status="$(state_value "$state_file" status | tr '[:upper:]' '[:lower:]')"
   [ "$status" = "waiting_for_external_review" ] || continue
-  "$SCRIPT_DIR/review-one.sh" "$repo" || true
+  REVIEW_TRIGGER=worker "$SCRIPT_DIR/review-one.sh" "$repo" || true
 done

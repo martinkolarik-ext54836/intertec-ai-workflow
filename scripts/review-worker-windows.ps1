@@ -43,6 +43,7 @@ function ConvertTo-GitBashPath {
 $scriptPath = [string]$config.WorkerPath
 $arguments = @($scriptPath)
 if ($Repository) {
+    $env:REVIEW_TRIGGER = "manual"
     $scriptPath = [string]$config.ReviewOnePath
     $arguments = @($scriptPath, (ConvertTo-GitBashPath -Path $Repository))
 }

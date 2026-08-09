@@ -75,11 +75,22 @@ fi
 identifier="$(repo_id "$repo")-$reviewed_sha"
 lock_dir="$RUNTIME_ROOT/locks/$identifier"
 completed_file="$RUNTIME_ROOT/completed/$identifier"
+failure_file="$RUNTIME_ROOT/failures/$identifier"
+giveup_file="$RUNTIME_ROOT/failures/$identifier.giveup"
 result_file="$RUNTIME_ROOT/results/$identifier.md"
 worktree="$RUNTIME_ROOT/worktrees/$identifier"
 
+if [ "${REVIEW_TRIGGER:-manual}" != "worker" ]; then
+  rm -f "$failure_file" "$giveup_file"
+  log_review "RESET repo=$repo reason=manual-retry sha=$reviewed_sha"
+fi
+
 if [ -f "$completed_file" ]; then
   log_review "SKIP repo=$repo reason=already-completed sha=$reviewed_sha"
+  exit 0
+fi
+if [ -f "$giveup_file" ]; then
+  log_review "SKIP repo=$repo reason=attempts-exhausted sha=$reviewed_sha"
   exit 0
 fi
 if ! acquire_lock "$lock_dir"; then
@@ -95,16 +106,39 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+record_failure() {
+  local reason="$1"
+  local notification="$2"
+  local attempts=0
+  if [ -f "$failure_file" ]; then
+    attempts="$(cat "$failure_file" 2>/dev/null || true)"
+  fi
+  case "$attempts" in
+    ''|*[!0-9]*) attempts=0 ;;
+  esac
+  attempts=$((attempts + 1))
+  printf '%s\n' "$attempts" > "$failure_file"
+  log_review "ERROR repo=$repo reason=$reason attempt=$attempts max_attempts=$REVIEW_MAX_ATTEMPTS sha=$reviewed_sha"
+  if [ "$attempts" -ge "$REVIEW_MAX_ATTEMPTS" ]; then
+    {
+      printf 'repo=%s\n' "$repo"
+      printf 'slug=%s\n' "$slug"
+      printf 'sha=%s\n' "$reviewed_sha"
+      printf 'attempts=%s\n' "$attempts"
+    } > "$giveup_file"
+    log_review "GIVEUP repo=$repo reason=$reason attempts=$attempts sha=$reviewed_sha"
+    notify_review "$slug" "$notification"
+  fi
+}
+
 codex_bin="$(find_codex || true)"
 if [ -z "$codex_bin" ]; then
-  log_review "ERROR repo=$repo reason=codex-not-found"
-  notify_review "$slug" "Codex CLI nebol nájdený."
+  record_failure "codex-not-found" "Codex CLI nebol nájdený."
   exit 4
 fi
 if [ "${REVIEW_SKIP_AUTH_CHECK:-0}" != "1" ]; then
   if ! "$codex_bin" login status 2>&1 | grep -q 'Logged in using ChatGPT'; then
-    log_review "ERROR repo=$repo reason=codex-not-chatgpt-authenticated"
-    notify_review "$slug" "Codex nie je prihlásený cez ChatGPT."
+    record_failure "codex-not-chatgpt-authenticated" "Codex nie je prihlásený cez ChatGPT."
     exit 4
   fi
 fi
@@ -132,14 +166,12 @@ codex_status=$?
 set -e
 
 if [ "$codex_status" -ne 0 ] || [ ! -s "$result_file" ]; then
-  log_review "ERROR repo=$repo reason=codex-failed exit=$codex_status sha=$reviewed_sha"
-  notify_review "$slug" "External review zlyhalo."
+  record_failure "codex-failed-exit-$codex_status" "External review zlyhalo."
   exit 5
 fi
 perl -pi -e 's/[ \t]+$//' "$result_file"
 if ! grep -Eq '^Verdict: (APPROVED|APPROVED_WITH_NOTES|CHANGES_REQUIRED|BLOCKED)[[:space:]]*$' "$result_file"; then
-  log_review "ERROR repo=$repo reason=invalid-review-contract sha=$reviewed_sha"
-  notify_review "$slug" "Review nemá platný verdict."
+  record_failure "invalid-review-contract" "Review nemá platný verdict."
   exit 5
 fi
 
@@ -180,5 +212,6 @@ if [ "${REVIEW_AUTO_COMMIT:-1}" = "1" ]; then
 fi
 
 printf '%s\n' "$reviewed_sha" > "$completed_file"
+rm -f "$failure_file" "$giveup_file"
 log_review "DONE repo=$repo slug=$slug reviewed_sha=$reviewed_sha verdict=$verdict review=$review_rel"
 notify_review "$slug" "External review: $verdict"
