@@ -85,11 +85,17 @@ if [ -z "$spec_rel" ] || [ -z "$plan_rel" ]; then
 fi
 case "$spec_rel" in .ai/specs/*.md) ;; *) log_review "SKIP repo=$repo reason=invalid-spec-path"; exit 3 ;; esac
 case "$plan_rel" in .ai/plans/*.md) ;; *) log_review "SKIP repo=$repo reason=invalid-plan-path"; exit 3 ;; esac
-if ! git -C "$repo" cat-file -e "$reviewed_sha:$spec_rel" 2>/dev/null || \
-   ! git -C "$repo" cat-file -e "$reviewed_sha:$plan_rel" 2>/dev/null; then
-  log_review "SKIP repo=$repo reason=spec-plan-not-in-commit slug=$slug sha=$reviewed_sha"
+# Workflow artifacts are local development notes and are not versioned, so they
+# are read from the working tree rather than from the reviewed commit.
+if [ ! -f "$repo/$spec_rel" ] || [ ! -f "$repo/$plan_rel" ]; then
+  log_review "SKIP repo=$repo reason=spec-plan-not-found slug=$slug sha=$reviewed_sha"
   exit 3
 fi
+self_review_rel="$(safe_project_path "$(state_value_any "$state_file" self_review self_review_path 2>/dev/null || true)" 2>/dev/null || true)"
+case "$self_review_rel" in
+  .ai/reviews/*.md) ;;
+  *) self_review_rel="" ;;
+esac
 
 review_rel="$(safe_project_path "$(state_value_any "$state_file" external_review external_review_path 2>/dev/null || true)" 2>/dev/null || true)"
 if [ -z "$review_rel" ]; then
@@ -218,7 +224,20 @@ fi
 git -C "$repo" worktree prune >/dev/null 2>&1 || true
 git -C "$repo" worktree add --detach "$worktree" "$reviewed_sha" >/dev/null
 
-prompt="You are the independent external reviewer. Review only commit $reviewed_sha in this repository. Read $AI_ROOT/WORKFLOW.md, $spec_rel, $plan_rel, .ai/project.md when present, and the self-review referenced by state when present. Do not modify source files. You may run relevant checks in this disposable worktree. Focus on correctness, regressions, security, privacy, data loss, external side effects, compatibility, rollback, and missing tests. Ignore style-only preferences. The runner has already verified the live handoff state and exact implementation SHA; the workflow intentionally permits that state update to remain uncommitted, so do not report committed .ai/state/current.md handoff values as a finding. Return one complete Markdown report following $AI_ROOT/templates/external-review.md. The report must contain exactly one verdict line using APPROVED, APPROVED_WITH_NOTES, CHANGES_REQUIRED, or BLOCKED. Use stable finding IDs and include true check outcomes; unavailable checks are NOT_RUN, never PASSED. Reviewed commit must be the full SHA $reviewed_sha."
+# The disposable worktree holds the reviewed commit, which does not carry the
+# unversioned workflow artifacts. Copy the ones the reviewer must read.
+copy_local_artifact() {
+  local relative="$1"
+  [ -n "$relative" ] || return 0
+  [ -f "$repo/$relative" ] || return 0
+  mkdir -p "$worktree/$(dirname "$relative")"
+  cp "$repo/$relative" "$worktree/$relative"
+}
+copy_local_artifact "$spec_rel"
+copy_local_artifact "$plan_rel"
+copy_local_artifact "$self_review_rel"
+
+prompt="You are the independent external reviewer. Review only commit $reviewed_sha in this repository. Read $AI_ROOT/WORKFLOW.md, $spec_rel, $plan_rel, .ai/project.md when present, and the self-review at $self_review_rel when that path is set. The workflow artifacts under .ai/ are unversioned local notes copied into this worktree, so never report their absence from the commit as a finding. Do not modify source files. You may run relevant checks in this disposable worktree. Focus on correctness, regressions, security, privacy, data loss, external side effects, compatibility, rollback, and missing tests. Ignore style-only preferences. The runner has already verified the live handoff state and exact implementation SHA; the workflow intentionally permits that state update to remain uncommitted, so do not report committed .ai/state/current.md handoff values as a finding. Return one complete Markdown report following $AI_ROOT/templates/external-review.md. The report must contain exactly one verdict line using APPROVED, APPROVED_WITH_NOTES, CHANGES_REQUIRED, or BLOCKED. Use stable finding IDs and include true check outcomes; unavailable checks are NOT_RUN, never PASSED. Reviewed commit must be the full SHA $reviewed_sha."
 
 log_review "START repo=$repo slug=$slug sha=$reviewed_sha model=$REVIEW_MODEL reasoning=$REVIEW_REASONING"
 rm -f "$result_file"
@@ -273,7 +292,9 @@ state_set "$state_file" reviewed_commit "$reviewed_sha"
 state_set "$state_file" last_updated "$(date '+%Y-%m-%d')"
 state_set "$state_file" next_action "$next_action"
 
-if [ "${REVIEW_AUTO_COMMIT:-1}" = "1" ]; then
+# Workflow artifacts are not versioned by default, so nothing is committed
+# unless a project deliberately opts in.
+if [ "${REVIEW_AUTO_COMMIT:-0}" = "1" ]; then
   if git -C "$repo" diff --cached --quiet; then
     git -C "$repo" add -- "$review_rel" .ai/state/current.md
     if git -C "$repo" diff --cached --check && \

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0 - 2026-08-12
+
+- Stopped versioning workflow artifacts. Specs, plans, reviews, and state are
+  local development scaffolding, are added to `.gitignore` by the initializer,
+  and are never a review, merge, or deployment gate. Project context and the
+  agent adapters stay versioned.
+- Made the reviewer read the spec, plan, and self-review from the working tree
+  and copy them into its disposable worktree, instead of requiring them in the
+  reviewed commit.
+- Turned automatic commits of review output and state off by default.
+
 ## 1.5.0 - 2026-08-12
 
 - Separated environment failures from commit failures: a missing or signed-out

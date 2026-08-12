@@ -111,8 +111,10 @@ Then edit `<repository>/.ai/project.md` and record verified project facts:
 - delivery policy;
 - production and data restrictions.
 
-Commit the generated project-local files to that project's repository so every
-collaborator and agent sees the same context.
+Commit `.ai/project.md`, `AGENTS.md`, `CLAUDE.md`, and the generated `.gitignore`
+entries so every collaborator and agent sees the same context. Specs, plans,
+reviews, and state are local development notes and stay out of Git; see
+"Retention and reviewer data".
 
 ## How agents use it
 
@@ -153,12 +155,12 @@ when needed:
 
 ```text
 .ai/
-├── project.md
-├── backlog.md                 # optional future ideas
-├── specs/                     # approved feature requirements
-├── plans/                     # implementation plans and checks
-├── reviews/                   # self-review and external review reports
-└── state/
+├── project.md                 # versioned
+├── backlog.md                 # versioned, optional future ideas
+├── specs/                     # local only, approved feature requirements
+├── plans/                     # local only, implementation plans and checks
+├── reviews/                   # local only, self-review and external review
+└── state/                     # local only
     ├── current.md             # at most one active governed feature
     ├── archive/               # parked, unfinished features only
     └── deployments.md         # optional deployment history
@@ -298,10 +300,21 @@ Its defaults can also be controlled with `PROJECTS_ROOT`, `REVIEW_MODEL`,
 
 ## Retention and reviewer data
 
-Git is the single source of truth. Specs, plans, reviews, and workflow state are
-committed to the repository that owns the change, so nothing is archived or
-duplicated elsewhere and superseded artifacts may simply be deleted from the
-working tree once a feature is merged and deployed.
+Specs, plans, reviews, and state are development scaffolding, not deliverables.
+They stay on the machine doing the work and are never committed; the repository
+records the change itself through its code, tests, commits, PR, and merge. The
+initializer adds them to `.gitignore`:
+
+```gitignore
+.ai/specs/
+.ai/plans/
+.ai/reviews/
+.ai/state/
+```
+
+`.ai/project.md`, `AGENTS.md`, and `CLAUDE.md` stay versioned, because every
+agent and collaborator needs the same project context. Delete a spec, plan, or
+review once its feature is delivered.
 
 The reviewer's runtime directory is a disposable cache, but while a review is in
 flight it does hold project content on disk outside the repository: the report
@@ -355,7 +368,7 @@ upgrade. Compare them with `templates/project.md` when adopting new fields.
   `BASH_EXE` to its `bash.exe` before running the installer.
 - **Review is skipped:** verify that state is exactly
   `waiting_for_external_review`, `implementation_commit` equals `git rev-parse
-  HEAD`, and the spec and plan are committed under `.ai/`.
+  HEAD`, and the spec and plan exist in the working tree under `.ai/`.
 - **Codex is not found:** set `CODEX_BIN` to an executable Codex CLI path and
   reinstall the reviewer.
 - **Configured model is unavailable:** reinstall with a supported

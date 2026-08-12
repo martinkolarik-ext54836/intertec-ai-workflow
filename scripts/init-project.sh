@@ -19,6 +19,29 @@ REPO_ROOT="$(git -C "$PROJECT" rev-parse --show-toplevel)"
 mkdir -p "$REPO_ROOT/.ai/specs" "$REPO_ROOT/.ai/plans" \
   "$REPO_ROOT/.ai/reviews" "$REPO_ROOT/.ai/state/archive"
 
+# Specs, plans, reviews, and state are local development notes, not deliverables.
+# Only the project context and the agent adapters belong in the repository.
+ensure_ignored() {
+  local pattern="$1"
+  local ignore_file="$REPO_ROOT/.gitignore"
+  if [ -f "$ignore_file" ] && grep -qxF "$pattern" "$ignore_file"; then
+    return 0
+  fi
+  if [ -s "$ignore_file" ] && [ -n "$(tail -c 1 "$ignore_file")" ]; then
+    printf '\n' >> "$ignore_file"
+  fi
+  if ! grep -qxF '# Local AI workflow artifacts (not deliverables)' "$ignore_file" 2>/dev/null; then
+    printf '%s\n' '# Local AI workflow artifacts (not deliverables)' >> "$ignore_file"
+  fi
+  printf '%s\n' "$pattern" >> "$ignore_file"
+  echo "Ignored $pattern"
+}
+
+ensure_ignored '.ai/specs/'
+ensure_ignored '.ai/plans/'
+ensure_ignored '.ai/reviews/'
+ensure_ignored '.ai/state/'
+
 if [ ! -f "$REPO_ROOT/.ai/project.md" ]; then
   cp "$SHARED_ROOT/templates/project.md" "$REPO_ROOT/.ai/project.md"
   project_name="$(basename "$REPO_ROOT")"

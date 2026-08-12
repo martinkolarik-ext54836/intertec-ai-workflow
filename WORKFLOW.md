@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.5.0
+Version: 1.6.0
 
 This is the canonical workflow for AI-assisted work in a shared projects
 directory. It is tool-neutral and applies to Codex, Claude Code, and other
@@ -97,8 +97,7 @@ is sufficient; do not ask for duplicate approval.
 6. Automatically fix non-controversial self-review findings and rerun checks.
 7. Commit the completed implementation when project policy allows it.
 8. Set state to `waiting_for_external_review` and record the exact commit SHA in
-   `implementation_commit`. This state update may remain uncommitted until the
-   automated reviewer records its report.
+   `implementation_commit`. State is never committed; see "Retention".
 
 #### External review phase
 
@@ -120,6 +119,7 @@ of these are true:
 
 - state is exactly `waiting_for_external_review`;
 - `implementation_commit` resolves to a commit and equals current `HEAD`;
+- the referenced spec and plan exist in the working tree;
 - no review has already completed for that repository and SHA.
 
 The worker reviews the SHA in a disposable Git worktree. It never sends the
@@ -179,15 +179,34 @@ review was already recorded.
 
 ## Retention
 
-Git is the single source of truth. The merge commit, the committed spec, plan,
-reviews, and the state file's own history already record what happened, so
-completed work is not copied, archived, or duplicated anywhere else.
+Specs, plans, reviews, and state are development scaffolding, not deliverables.
+They stay on the machine doing the work and are never committed. What the
+repository records is the change itself: the code, the tests, the commit
+messages, the PR, and the merge.
 
-- Do not create per-feature archive copies of completed state.
-- Superseded specs, plans, and reviews may be deleted from the working tree once
-  the feature is merged and deployed; Git retains them.
-- `.ai/state/archive/` is only for a feature that is deliberately parked while
-  still unfinished. Delete the file when that work resumes or is abandoned.
+Keep out of version control, via `.gitignore`:
+
+```gitignore
+.ai/specs/
+.ai/plans/
+.ai/reviews/
+.ai/state/
+```
+
+Keep in version control, because every agent and collaborator needs them:
+
+- `.ai/project.md`
+- `AGENTS.md` and `CLAUDE.md`
+
+Consequences to respect:
+
+- Never make committing a workflow artifact a review, merge, or deploy gate.
+- Never reconstruct history from these files; use Git history for that.
+- Delete a spec, plan, or review as soon as its feature is delivered.
+- `.ai/state/archive/` is only for a feature deliberately parked while
+  unfinished. Delete the file when that work resumes or is abandoned.
+- The reviewer reads the spec and plan from the working tree, copies them into
+  its disposable worktree, and commits nothing by default.
 - The reviewer's runtime directory is a disposable cache. Nothing in it is a
   source of truth, its logs rotate, and its markers and leftover reports expire
   after `REVIEW_RETENTION_DAYS`.
@@ -299,13 +318,13 @@ post-review PR, merge, and deployment lifecycle defined above.
 Shared policy and templates live in `<workflow-root>`. The following
 always belong to the repository that owns the change:
 
-- `.ai/project.md`
-- `.ai/backlog.md`
-- `.ai/specs/`
-- `.ai/plans/`
-- `.ai/reviews/`
-- `.ai/state/current.md`
-- `.ai/state/archive/` (parked features only)
-- `.ai/state/deployments.md`
+- `.ai/project.md` (versioned)
+- `.ai/backlog.md` (versioned)
+- `.ai/specs/` (local only)
+- `.ai/plans/` (local only)
+- `.ai/reviews/` (local only)
+- `.ai/state/current.md` (local only)
+- `.ai/state/archive/` (local only, parked features)
+- `.ai/state/deployments.md` (local only)
 
 Never store project feature history in the central workflow repository.

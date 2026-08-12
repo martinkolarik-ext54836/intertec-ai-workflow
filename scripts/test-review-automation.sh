@@ -91,6 +91,11 @@ printf '%s\n' "$((calls + 1))" > "$FAKE_CODEX_CALLS"
 if [ "${FAKE_CODEX_EXIT:-0}" -ne 0 ]; then
   exit "$FAKE_CODEX_EXIT"
 fi
+# Proves the reviewer can read unversioned artifacts inside its worktree.
+if [ -n "${FAKE_REQUIRE_WORKTREE_FILE:-}" ] && [ ! -f "$FAKE_REQUIRE_WORKTREE_FILE" ]; then
+  echo "required artifact missing from worktree: $FAKE_REQUIRE_WORKTREE_FILE" >&2
+  exit 9
+fi
 output=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -314,6 +319,36 @@ printf '%s|Thu Jan 1 00:00:00 1970\n' "$$" > "$runtime/locks/$reused_identifier/
 printf '0\n' > "$fake_calls"
 run_review_one "$reused_repo" "$reused_sha" APPROVED 0
 test "$(cat "$fake_calls")" = "1"
+
+# Unversioned workflow artifacts are read from the working tree and reach the
+# reviewer, and nothing is committed unless the project opts in.
+create_fixture unversioned
+unversioned_repo="$fixture_repo"
+git -C "$unversioned_repo" rm -r -q --cached .ai/specs .ai/plans .ai/state
+printf '%s\n' '.ai/specs/' '.ai/plans/' '.ai/reviews/' '.ai/state/' \
+  > "$unversioned_repo/.gitignore"
+git -C "$unversioned_repo" add .gitignore
+git -C "$unversioned_repo" commit -q -m "chore: stop versioning workflow artifacts"
+unversioned_sha="$(git -C "$unversioned_repo" rev-parse HEAD)"
+sed -i.bak "s/^implementation_commit:.*/implementation_commit: $unversioned_sha/" \
+  "$unversioned_repo/.ai/state/current.md"
+rm "$unversioned_repo/.ai/state/current.md.bak"
+test -z "$(git -C "$unversioned_repo" status --porcelain)"
+PROJECTS_ROOT="$test_root" \
+REVIEW_RUNTIME_ROOT="$runtime" \
+REVIEW_LOG_ROOT="$logs" \
+CODEX_BIN="$fake_codex" \
+REVIEW_SKIP_AUTH_CHECK=1 \
+REVIEW_NOTIFY=0 \
+FAKE_CODEX_VERDICT=APPROVED \
+FAKE_REVIEWED_COMMIT="$unversioned_sha" \
+FAKE_REQUIRE_WORKTREE_FILE=".ai/specs/review-fixture.md" \
+  "$SCRIPT_DIR/review-one.sh" "$unversioned_repo"
+grep -q '^status: external_review_done$' "$unversioned_repo/.ai/state/current.md"
+test -s "$unversioned_repo/.ai/reviews/$(date '+%Y-%m-%d')-review-fixture-external-review.md"
+# Auto-commit is off by default, so the repository is untouched.
+test "$(git -C "$unversioned_repo" rev-parse HEAD)" = "$unversioned_sha"
+test -z "$(git -C "$unversioned_repo" status --porcelain)"
 
 # Logs rotate and expired runtime markers are deleted.
 prune_runtime_root="$test_root/prune-runtime"
