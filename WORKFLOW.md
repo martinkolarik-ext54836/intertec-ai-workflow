@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.4.0
+Version: 1.5.0
 
 This is the canonical workflow for AI-assisted work in a shared projects
 directory. It is tool-neutral and applies to Codex, Claude Code, and other
@@ -129,10 +129,19 @@ project still points to the reviewed SHA, then updates state to
 `external_review_done`, `changes_required`, or `blocked` according to the
 verdict. Class A and Class B work never triggers this automation.
 
+Failures are bounded and are attributed to their real cause. A commit whose
+review keeps failing is abandoned after `REVIEW_MAX_ATTEMPTS` attempts and
+reported as a give-up entry. A broken reviewing environment, such as a missing
+or signed-out Codex CLI, instead pauses every repository for a growing interval
+and resumes on its own once the environment works again. A commit that already
+has a recorded review while its project still asks for one is reported as a
+stalled handoff rather than skipped silently.
+
 Manual trigger and service status:
 
 ```bash
 <workflow-root>/scripts/review-now.sh /path/to/repository
+<workflow-root>/scripts/review-now.sh --force /path/to/repository
 <workflow-root>/scripts/reviewer-status.sh
 ```
 
@@ -140,8 +149,13 @@ On Windows PowerShell:
 
 ```powershell
 <workflow-root>\scripts\review-now-windows.ps1 -Repository C:\path\to\repository
+<workflow-root>\scripts\review-now-windows.ps1 -Repository C:\path\to\repository -Force
 <workflow-root>\scripts\reviewer-status-windows.ps1
 ```
+
+A manual trigger is always a deliberate retry: it clears give-up state and
+ignores the environment cooldown. `--force` additionally reviews a commit whose
+review was already recorded.
 
 #### Delivery phase
 
@@ -160,7 +174,23 @@ On Windows PowerShell:
   still requires explicit approval.
 - Use only the repository's documented deploy command.
 - Run the documented smoke check and record the deployed commit.
-- Archive completed state at `.ai/state/archive/YYYY-MM-DD-slug.md`.
+- Reset `.ai/state/current.md` to the empty template once the feature is
+  deployed. Do not copy it anywhere; see "Retention".
+
+## Retention
+
+Git is the single source of truth. The merge commit, the committed spec, plan,
+reviews, and the state file's own history already record what happened, so
+completed work is not copied, archived, or duplicated anywhere else.
+
+- Do not create per-feature archive copies of completed state.
+- Superseded specs, plans, and reviews may be deleted from the working tree once
+  the feature is merged and deployed; Git retains them.
+- `.ai/state/archive/` is only for a feature that is deliberately parked while
+  still unfinished. Delete the file when that work resumes or is abandoned.
+- The reviewer's runtime directory is a disposable cache. Nothing in it is a
+  source of truth, its logs rotate, and its markers and leftover reports expire
+  after `REVIEW_RETENTION_DAYS`.
 
 ## One governed feature in flight
 
@@ -184,6 +214,23 @@ plans that will become stale.
 - `merged`
 - `deployed`
 - `parked`
+
+## Next actions
+
+`next_action` is a machine-readable enum, so automation and humans read the
+same handoff. Put any explanation in `next_action_note`, never in the field
+itself.
+
+- `NONE`
+- `AWAIT_PLAN_APPROVAL`
+- `IMPLEMENT`
+- `FIX_FINDINGS`
+- `RESOLVE_REVIEW_BLOCKER`
+- `AWAIT_EXTERNAL_REVIEW`
+- `AWAIT_PR_APPROVAL`
+- `AWAIT_MERGE_APPROVAL`
+- `DEPLOY`
+- `VERIFY_DEPLOYMENT`
 
 ## Stop and ask first
 
@@ -258,7 +305,7 @@ always belong to the repository that owns the change:
 - `.ai/plans/`
 - `.ai/reviews/`
 - `.ai/state/current.md`
-- `.ai/state/archive/`
+- `.ai/state/archive/` (parked features only)
 - `.ai/state/deployments.md`
 
 Never store project feature history in the central workflow repository.

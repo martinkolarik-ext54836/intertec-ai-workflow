@@ -136,7 +136,7 @@ For Class C, the normal lifecycle is:
 
 ```text
 request → spec/plan → one approval → implementation → self-review
-→ committed SHA → independent review → PR/merge → deployment → archive
+→ committed SHA → independent review → PR/merge → deployment → state reset
 ```
 
 The agent must record unavailable checks as `NOT_RUN`, preserve unrelated user
@@ -160,7 +160,7 @@ when needed:
 ├── reviews/                   # self-review and external review reports
 └── state/
     ├── current.md             # at most one active governed feature
-    ├── archive/               # completed or parked features
+    ├── archive/               # parked, unfinished features only
     └── deployments.md         # optional deployment history
 ```
 
@@ -175,6 +175,9 @@ Templates are available in this repository's `templates/` directory.
 
 # Validate the shared installation and initialized repositories
 ./scripts/doctor.sh
+
+# Rotate reviewer logs and delete expired runtime markers
+./scripts/prune-runtime.sh
 
 # Test the automatic-review orchestration without model usage
 ./scripts/test-review-automation.sh
@@ -224,8 +227,13 @@ Operate the reviewer:
 ```bash
 ./scripts/reviewer-status.sh
 ./scripts/review-now.sh /path/to/repository
+./scripts/review-now.sh --force /path/to/repository
 ./scripts/uninstall-reviewer.sh
 ```
+
+A manual run is always treated as a deliberate retry: it clears give-up state
+and ignores the environment cooldown. `--force` also reviews a commit whose
+review was already recorded.
 
 ### Windows (Task Scheduler)
 
@@ -254,6 +262,7 @@ Operate the Windows reviewer:
 ```powershell
 .\scripts\reviewer-status-windows.ps1
 .\scripts\review-now-windows.ps1 -Repository "D:\Projects\my-project"
+.\scripts\review-now-windows.ps1 -Repository "D:\Projects\my-project" -Force
 .\scripts\uninstall-reviewer-windows.ps1
 ```
 
@@ -271,10 +280,44 @@ The reviewer:
   empty;
 - never pushes, fixes source, creates a PR, merges, or deploys.
 
+Failures are bounded, and each kind is handled where it belongs:
+
+- a commit whose review keeps failing is abandoned after `REVIEW_MAX_ATTEMPTS`
+  attempts and listed as a give-up entry by the status command;
+- a broken reviewing environment, such as a missing or signed-out Codex CLI,
+  pauses every repository for the intervals in `REVIEW_ENV_COOLDOWN_STEPS` and
+  resumes automatically, without consuming any commit's attempts;
+- a commit that already has a recorded review while its project still asks for
+  one is listed as a stalled handoff instead of being skipped silently.
+
 Its defaults can also be controlled with `PROJECTS_ROOT`, `REVIEW_MODEL`,
 `REVIEW_REASONING`, `REVIEW_RUNTIME_ROOT`, `REVIEW_LOG_ROOT`, `CODEX_BIN`,
-`REVIEW_NOTIFY`, `REVIEW_AUTO_COMMIT`, `REVIEW_SERVICE_LABEL`, and
-`REVIEW_SERVICE_PLIST`.
+`REVIEW_NOTIFY`, `REVIEW_AUTO_COMMIT`, `REVIEW_MAX_ATTEMPTS`,
+`REVIEW_ENV_COOLDOWN_STEPS`, `REVIEW_RETENTION_DAYS`, `REVIEW_LOG_MAX_BYTES`,
+`REVIEW_LOG_KEEP`, `REVIEW_SERVICE_LABEL`, and `REVIEW_SERVICE_PLIST`.
+
+## Retention and reviewer data
+
+Git is the single source of truth. Specs, plans, reviews, and workflow state are
+committed to the repository that owns the change, so nothing is archived or
+duplicated elsewhere and superseded artifacts may simply be deleted from the
+working tree once a feature is merged and deployed.
+
+The reviewer's runtime directory is a disposable cache, but while a review is in
+flight it does hold project content on disk outside the repository: the report
+produced for a commit, plus markers naming repository paths and slugs. It is
+kept small and short-lived:
+
+- a report is deleted as soon as it has been written into its repository;
+- `reviewer.log` and `codex.log` rotate at `REVIEW_LOG_MAX_BYTES` and keep
+  `REVIEW_LOG_KEEP` files;
+- markers, rotated logs, and reports that were never applied are deleted after
+  `REVIEW_RETENTION_DAYS`;
+- the scheduled worker prunes on every scan, and `./scripts/prune-runtime.sh`
+  does it on demand.
+
+Delete the whole runtime and log directory at any time; the reviewer recreates
+what it needs.
 
 ## Updating an installation
 

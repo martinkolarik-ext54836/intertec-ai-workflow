@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.5.0 - 2026-08-12
+
+- Separated environment failures from commit failures: a missing or signed-out
+  Codex CLI now pauses all repositories for a growing interval and resumes on
+  its own, instead of permanently abandoning every waiting commit.
+- Reported a recorded review whose project still waits for one as a stalled
+  handoff instead of skipping it silently forever.
+- Made the unattended worker the default trigger, so no caller can accidentally
+  restore unbounded retries, and added `--force` for a deliberate re-review.
+- Made lock acquisition fail closed and made it survive PID reuse.
+- Added runtime retention: rotating logs, expiring markers, deletion of review
+  copies already committed to their repository, and `scripts/prune-runtime.sh`.
+- Recorded that Git is the single source of truth: completed features are no
+  longer archived into `.ai/state/archive/`, and superseded specs, plans, and
+  reviews may be deleted from the working tree.
+- Defined `next_action` as an enum with a separate `next_action_note`.
+- Reported workflow version drift and unreachable review handoffs in
+  `doctor.sh`, and environment cooldown and stalled handoffs in reviewer status.
+- Extended CI to macOS and added PowerShell parsing and PSScriptAnalyzer checks.
+- Translated the remaining Slovak reviewer notifications to English and allowed
+  `REVIEW_MAX_ATTEMPTS=0` to mean no retry.
+
 ## 1.4.0 - 2026-08-09
 
 - Bounded automatic reviewer failures to three attempts by default, with
