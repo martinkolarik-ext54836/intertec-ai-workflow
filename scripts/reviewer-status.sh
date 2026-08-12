@@ -22,18 +22,37 @@ echo "Reasoning: $REVIEW_REASONING"
 echo "Runtime: $RUNTIME_ROOT"
 echo "Logs: $LOG_ROOT"
 echo
-echo "Give-up entries:"
-giveup_entries="$(find "$RUNTIME_ROOT/failures" -maxdepth 1 -type f -name '*.giveup' -print 2>/dev/null | sort)"
-if [ -n "$giveup_entries" ]; then
-  while IFS= read -r giveup_file; do
-    echo "${giveup_file##*/}"
-    sed 's/^/  /' "$giveup_file"
-  done <<EOF
-$giveup_entries
-EOF
+echo "Environment cooldown:"
+cooldown_remaining="$(environment_cooldown_remaining)"
+if [ -f "$ENVIRONMENT_COOLDOWN_FILE" ]; then
+  sed 's/^/  /' "$ENVIRONMENT_COOLDOWN_FILE"
+  echo "  seconds_remaining=$cooldown_remaining"
 else
   echo "none"
 fi
+
+print_marker_group() {
+  local label="$1"
+  local pattern="$2"
+  local entries entry
+  echo
+  echo "$label:"
+  entries="$(find "$RUNTIME_ROOT/failures" -maxdepth 1 -type f -name "$pattern" -print 2>/dev/null | sort)"
+  if [ -z "$entries" ]; then
+    echo "none"
+    return 0
+  fi
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    echo "${entry##*/}"
+    sed 's/^/  /' "$entry"
+  done <<MARKERS
+$entries
+MARKERS
+}
+
+print_marker_group "Give-up entries" '*.giveup'
+print_marker_group "Stalled handoffs (review recorded but project still waiting)" '*.stalled'
 echo
 echo "Recent activity:"
 if [ -f "$LOG_ROOT/reviewer.log" ]; then

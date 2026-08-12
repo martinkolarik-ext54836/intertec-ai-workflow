@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$ConfigPath = "$env:LOCALAPPDATA\SharedAIReviewer\config.json",
-    [string]$Repository
+    [string]$Repository,
+    [switch]$Force
 )
 
 Set-StrictMode -Version Latest
@@ -42,8 +43,13 @@ function ConvertTo-GitBashPath {
 
 $scriptPath = [string]$config.WorkerPath
 $arguments = @($scriptPath)
+$env:REVIEW_TRIGGER = "worker"
+$env:REVIEW_FORCE = "0"
 if ($Repository) {
     $env:REVIEW_TRIGGER = "manual"
+    if ($Force) {
+        $env:REVIEW_FORCE = "1"
+    }
     $scriptPath = [string]$config.ReviewOnePath
     $arguments = @($scriptPath, (ConvertTo-GitBashPath -Path $Repository))
 }

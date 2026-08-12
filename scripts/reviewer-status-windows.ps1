@@ -29,16 +29,30 @@ if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
     Write-Host "Runtime: $($config.RuntimeRoot)"
     Write-Host "Logs: $($config.LogRoot)"
     Write-Host ""
-    Write-Host "Give-up entries:"
-    $failureDirectory = Join-Path ([string]$config.RuntimeRoot) "failures"
-    $giveupEntries = @(Get-ChildItem -LiteralPath $failureDirectory -Filter "*.giveup" -File -ErrorAction SilentlyContinue)
-    if ($giveupEntries.Count -gt 0) {
-        foreach ($entry in $giveupEntries | Sort-Object Name) {
-            Write-Host $entry.Name
-            Get-Content -LiteralPath $entry.FullName | ForEach-Object { Write-Host "  $_" }
-        }
+    Write-Host "Environment cooldown:"
+    $cooldownFile = Join-Path ([string]$config.RuntimeRoot) "environment-cooldown"
+    if (Test-Path -LiteralPath $cooldownFile -PathType Leaf) {
+        Get-Content -LiteralPath $cooldownFile | ForEach-Object { Write-Host "  $_" }
     } else {
         Write-Host "none"
+    }
+
+    $failureDirectory = Join-Path ([string]$config.RuntimeRoot) "failures"
+    foreach ($group in @(
+        @{ Label = "Give-up entries"; Pattern = "*.giveup" },
+        @{ Label = "Stalled handoffs (review recorded but project still waiting)"; Pattern = "*.stalled" }
+    )) {
+        Write-Host ""
+        Write-Host "$($group.Label):"
+        $entries = @(Get-ChildItem -LiteralPath $failureDirectory -Filter $group.Pattern -File -ErrorAction SilentlyContinue)
+        if ($entries.Count -gt 0) {
+            foreach ($entry in $entries | Sort-Object Name) {
+                Write-Host $entry.Name
+                Get-Content -LiteralPath $entry.FullName | ForEach-Object { Write-Host "  $_" }
+            }
+        } else {
+            Write-Host "none"
+        }
     }
 }
 

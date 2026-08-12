@@ -216,4 +216,122 @@ test "$(git -C "$staged_repo" diff --cached --name-only)" = "preexisting.txt"
 test -z "$(git -C "$staged_repo" diff --cached --name-only -- .ai/state/current.md .ai/reviews)"
 grep -q "WARN repo=$staged_repo reason=preexisting-staged-changes" "$logs/reviewer.log"
 
+# A broken environment pauses every repository instead of consuming one
+# commit's attempt budget.
+create_fixture environment
+environment_repo="$fixture_repo"
+environment_sha="$fixture_sha"
+environment_identifier="$(review_identifier "$environment_repo" "$environment_sha")"
+empty_home="$test_root/empty-home"
+mkdir -p "$empty_home"
+printf '0\n' > "$fake_calls"
+set +e
+PATH=/usr/bin:/bin \
+HOME="$empty_home" \
+PROJECTS_ROOT="$test_root" \
+REVIEW_RUNTIME_ROOT="$runtime" \
+REVIEW_LOG_ROOT="$logs" \
+REVIEW_NOTIFY=0 \
+REVIEW_TRIGGER=worker \
+  "$SCRIPT_DIR/review-one.sh" "$environment_repo"
+environment_status=$?
+set -e
+test "$environment_status" = "4"
+test -f "$runtime/environment-cooldown"
+test ! -e "$runtime/failures/$environment_identifier"
+grep -q "ENVIRONMENT repo=$environment_repo reason=codex-not-found" "$logs/reviewer.log"
+
+# The scheduled worker starts no review while the cooldown is active.
+PROJECTS_ROOT="$test_root" \
+REVIEW_RUNTIME_ROOT="$runtime" \
+REVIEW_LOG_ROOT="$logs" \
+CODEX_BIN="$fake_codex" \
+REVIEW_SKIP_AUTH_CHECK=1 \
+REVIEW_AUTO_COMMIT=0 \
+REVIEW_NOTIFY=0 \
+FAKE_REVIEWED_COMMIT="$environment_sha" \
+  "$SCRIPT_DIR/review-worker.sh"
+test "$(cat "$fake_calls")" = "0"
+grep -q "reason=environment-cooldown" "$logs/reviewer.log"
+
+# Once the cooldown expires the worker resumes on its own and clears it.
+sed -i.bak 's/^until=.*/until=0/' "$runtime/environment-cooldown"
+rm -f "$runtime/environment-cooldown.bak"
+run_review_one "$environment_repo" "$environment_sha" APPROVED 0
+test ! -e "$runtime/environment-cooldown"
+grep -q '^status: external_review_done$' "$environment_repo/.ai/state/current.md"
+
+# A recorded review while the project still waits is reported, not skipped.
+create_fixture stalled
+stalled_repo="$fixture_repo"
+stalled_sha="$fixture_sha"
+stalled_identifier="$(review_identifier "$stalled_repo" "$stalled_sha")"
+printf '%s\n' "$stalled_sha" > "$runtime/completed/$stalled_identifier"
+printf '0\n' > "$fake_calls"
+run_review_one "$stalled_repo" "$stalled_sha" APPROVED 0
+test "$(cat "$fake_calls")" = "0"
+test -f "$runtime/failures/$stalled_identifier.stalled"
+grep -q "STALL repo=$stalled_repo reason=completed-but-still-waiting" "$logs/reviewer.log"
+
+# --force reviews a commit whose review was already recorded.
+REVIEW_RUNTIME_ROOT="$runtime" \
+REVIEW_LOG_ROOT="$logs" \
+CODEX_BIN="$fake_codex" \
+REVIEW_SKIP_AUTH_CHECK=1 \
+REVIEW_AUTO_COMMIT=0 \
+REVIEW_NOTIFY=0 \
+FAKE_CODEX_VERDICT=APPROVED \
+FAKE_REVIEWED_COMMIT="$stalled_sha" \
+  "$SCRIPT_DIR/review-now.sh" --force "$stalled_repo"
+test "$(cat "$fake_calls")" = "1"
+test ! -e "$runtime/failures/$stalled_identifier.stalled"
+grep -q '^status: external_review_done$' "$stalled_repo/.ai/state/current.md"
+
+# A lock held by a live process is respected.
+create_fixture locked
+locked_repo="$fixture_repo"
+locked_sha="$fixture_sha"
+locked_identifier="$(review_identifier "$locked_repo" "$locked_sha")"
+mkdir -p "$runtime/locks/$locked_identifier"
+printf '%s|\n' "$$" > "$runtime/locks/$locked_identifier/owner"
+printf '0\n' > "$fake_calls"
+run_review_one "$locked_repo" "$locked_sha" APPROVED 0
+test "$(cat "$fake_calls")" = "0"
+grep -q "reason=already-running" "$logs/reviewer.log"
+
+# A lock whose owner is gone is reclaimed.
+printf '%s|\n' "4194305" > "$runtime/locks/$locked_identifier/owner"
+run_review_one "$locked_repo" "$locked_sha" APPROVED 0
+test "$(cat "$fake_calls")" = "1"
+
+# A lock whose PID was reused by a different process is reclaimed.
+create_fixture reused-pid
+reused_repo="$fixture_repo"
+reused_sha="$fixture_sha"
+reused_identifier="$(review_identifier "$reused_repo" "$reused_sha")"
+mkdir -p "$runtime/locks/$reused_identifier"
+printf '%s|Thu Jan 1 00:00:00 1970\n' "$$" > "$runtime/locks/$reused_identifier/owner"
+printf '0\n' > "$fake_calls"
+run_review_one "$reused_repo" "$reused_sha" APPROVED 0
+test "$(cat "$fake_calls")" = "1"
+
+# Logs rotate and expired runtime markers are deleted.
+prune_runtime_root="$test_root/prune-runtime"
+prune_log_root="$test_root/prune-logs"
+mkdir -p "$prune_runtime_root/completed" "$prune_log_root"
+printf 'expired\n' > "$prune_runtime_root/completed/expired"
+touch -t 200001010000 "$prune_runtime_root/completed/expired"
+printf 'fresh\n' > "$prune_runtime_root/completed/fresh"
+head -c 4096 /dev/zero | tr '\0' 'x' > "$prune_log_root/reviewer.log"
+REVIEW_RUNTIME_ROOT="$prune_runtime_root" \
+REVIEW_LOG_ROOT="$prune_log_root" \
+REVIEW_LOG_MAX_BYTES=1024 \
+REVIEW_LOG_KEEP=2 \
+REVIEW_RETENTION_DAYS=30 \
+  "$SCRIPT_DIR/prune-runtime.sh" >/dev/null
+test ! -e "$prune_runtime_root/completed/expired"
+test -f "$prune_runtime_root/completed/fresh"
+test -f "$prune_log_root/reviewer.log.1"
+test ! -s "$prune_log_root/reviewer.log"
+
 echo "Automatic review integration tests passed."

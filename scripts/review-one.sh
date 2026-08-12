@@ -5,16 +5,44 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=review-common.sh
 source "$SCRIPT_DIR/review-common.sh"
 
-repo="${1:-}"
+usage() {
+  cat <<'USAGE'
+Usage: review-one.sh [--force] /path/to/repository
+
+  --force  Review the current implementation commit again even when a review
+           has already been recorded for it, and clear any give-up state.
+USAGE
+}
+
+force=0
+if [ "${REVIEW_FORCE:-0}" = "1" ]; then
+  force=1
+fi
+requested_repo=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --force) force=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; break ;;
+    -*) usage >&2; exit 2 ;;
+    *) requested_repo="$1"; shift ;;
+  esac
+done
+
+repo="$requested_repo"
 if [ -z "$repo" ] || [ ! -d "$repo" ]; then
-  echo "Usage: review-one.sh /path/to/repository" >&2
+  usage >&2
   exit 2
 fi
 repo="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$repo" ]; then
-  echo "Not a Git repository: $1" >&2
+  echo "Not a Git repository: $requested_repo" >&2
   exit 2
 fi
+
+# Anything that does not identify itself is treated as the unattended worker,
+# so a caller can never accidentally re-enable unbounded retries.
+trigger="${REVIEW_TRIGGER:-worker}"
 
 state_file="$repo/.ai/state/current.md"
 if [ ! -f "$state_file" ]; then
@@ -77,21 +105,44 @@ lock_dir="$RUNTIME_ROOT/locks/$identifier"
 completed_file="$RUNTIME_ROOT/completed/$identifier"
 failure_file="$RUNTIME_ROOT/failures/$identifier"
 giveup_file="$RUNTIME_ROOT/failures/$identifier.giveup"
+stalled_file="$RUNTIME_ROOT/failures/$identifier.stalled"
 result_file="$RUNTIME_ROOT/results/$identifier.md"
 worktree="$RUNTIME_ROOT/worktrees/$identifier"
 
-if [ "${REVIEW_TRIGGER:-manual}" != "worker" ]; then
-  rm -f "$failure_file" "$giveup_file"
-  log_review "RESET repo=$repo reason=manual-retry sha=$reviewed_sha"
+if [ "$trigger" != "worker" ] || [ "$force" = "1" ]; then
+  rm -f "$failure_file" "$giveup_file" "$stalled_file"
+  log_review "RESET repo=$repo reason=manual-retry force=$force sha=$reviewed_sha"
+fi
+if [ "$force" = "1" ]; then
+  rm -f "$completed_file"
 fi
 
+# Reaching this point means the project still asks for a review. A completed
+# marker for the same commit therefore means the handoff is stuck, not done.
 if [ -f "$completed_file" ]; then
-  log_review "SKIP repo=$repo reason=already-completed sha=$reviewed_sha"
+  if [ -f "$stalled_file" ]; then
+    log_review "SKIP repo=$repo reason=already-completed sha=$reviewed_sha"
+  else
+    {
+      printf 'repo=%s\n' "$repo"
+      printf 'slug=%s\n' "$slug"
+      printf 'sha=%s\n' "$reviewed_sha"
+      printf 'detected=%s\n' "$(timestamp)"
+    } > "$stalled_file"
+    log_review "STALL repo=$repo reason=completed-but-still-waiting sha=$reviewed_sha"
+    notify_review "$slug" \
+      "A review is already recorded for this commit but the project still waits for one."
+  fi
   exit 0
 fi
 if [ -f "$giveup_file" ]; then
   log_review "SKIP repo=$repo reason=attempts-exhausted sha=$reviewed_sha"
   exit 0
+fi
+cooldown_remaining="$(environment_cooldown_remaining)"
+if [ "$trigger" = "worker" ] && [ "$cooldown_remaining" -gt 0 ]; then
+  log_review "SKIP repo=$repo reason=environment-cooldown seconds_remaining=$cooldown_remaining"
+  exit 3
 fi
 if ! acquire_lock "$lock_dir"; then
   log_review "SKIP repo=$repo reason=already-running sha=$reviewed_sha"
@@ -131,17 +182,34 @@ record_failure() {
   fi
 }
 
+# The reviewing environment is shared by every repository, so its failures pause
+# all work for a growing interval instead of exhausting one commit's attempts.
+record_environment_problem() {
+  local reason="$1"
+  local notification="$2"
+  local recorded failures delay
+  recorded="$(record_environment_failure "$reason")"
+  failures="${recorded%% *}"
+  delay="${recorded##* }"
+  log_review "ENVIRONMENT repo=$repo reason=$reason failures=$failures cooldown_seconds=$delay sha=$reviewed_sha"
+  if [ "$failures" = "1" ]; then
+    notify_review "$slug" "$notification"
+  fi
+}
+
 codex_bin="$(find_codex || true)"
 if [ -z "$codex_bin" ]; then
-  record_failure "codex-not-found" "Codex CLI nebol nájdený."
+  record_environment_problem "codex-not-found" "Codex CLI was not found."
   exit 4
 fi
 if [ "${REVIEW_SKIP_AUTH_CHECK:-0}" != "1" ]; then
   if ! "$codex_bin" login status 2>&1 | grep -q 'Logged in using ChatGPT'; then
-    record_failure "codex-not-chatgpt-authenticated" "Codex nie je prihlásený cez ChatGPT."
+    record_environment_problem "codex-not-chatgpt-authenticated" \
+      "Codex is not signed in with ChatGPT."
     exit 4
   fi
 fi
+clear_environment_failure
 
 mkdir -p "$(dirname "$worktree")"
 if [ -d "$worktree" ]; then
@@ -166,18 +234,18 @@ codex_status=$?
 set -e
 
 if [ "$codex_status" -ne 0 ] || [ ! -s "$result_file" ]; then
-  record_failure "codex-failed-exit-$codex_status" "External review zlyhalo."
+  record_failure "codex-failed-exit-$codex_status" "External review failed."
   exit 5
 fi
 perl -pi -e 's/[ \t]+$//' "$result_file"
 if ! grep -Eq '^Verdict: (APPROVED|APPROVED_WITH_NOTES|CHANGES_REQUIRED|BLOCKED)[[:space:]]*$' "$result_file"; then
-  record_failure "invalid-review-contract" "Review nemá platný verdict."
+  record_failure "invalid-review-contract" "External review returned no valid verdict."
   exit 5
 fi
 
 if [ "$(git -C "$repo" rev-parse HEAD)" != "$reviewed_sha" ]; then
   log_review "STALE repo=$repo reason=head-changed sha=$reviewed_sha result=$result_file"
-  notify_review "$slug" "Review dokončené, ale HEAD sa zmenil; výsledok nebol aplikovaný."
+  notify_review "$slug" "Review finished but HEAD moved; the result was not applied."
   exit 6
 fi
 
@@ -221,6 +289,8 @@ if [ "${REVIEW_AUTO_COMMIT:-1}" = "1" ]; then
 fi
 
 printf '%s\n' "$reviewed_sha" > "$completed_file"
-rm -f "$failure_file" "$giveup_file"
+rm -f "$failure_file" "$giveup_file" "$stalled_file"
+# The report now lives in the repository, so the runtime copy is redundant.
+rm -f "$result_file"
 log_review "DONE repo=$repo slug=$slug reviewed_sha=$reviewed_sha verdict=$verdict review=$review_rel"
 notify_review "$slug" "External review: $verdict"

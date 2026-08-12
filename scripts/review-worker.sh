@@ -11,6 +11,9 @@ if ! acquire_lock "$worker_lock"; then
 fi
 trap 'rm -rf "$worker_lock" >/dev/null 2>&1 || true' EXIT INT TERM
 
+rotate_logs
+prune_runtime
+
 log_review "SCAN projects_root=$PROJECTS_ROOT"
 for state_file in \
   "$PROJECTS_ROOT"/*/.ai/state/current.md \

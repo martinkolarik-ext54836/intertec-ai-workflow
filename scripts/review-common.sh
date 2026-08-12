@@ -7,13 +7,34 @@ LOG_ROOT="${REVIEW_LOG_ROOT:-$HOME/Library/Logs/IntertecAIReviewer}"
 REVIEW_MODEL="${REVIEW_MODEL:-gpt-5.6-terra}"
 REVIEW_REASONING="${REVIEW_REASONING:-high}"
 REVIEW_MAX_ATTEMPTS="${REVIEW_MAX_ATTEMPTS:-3}"
-case "$REVIEW_MAX_ATTEMPTS" in
-  ''|*[!0-9]*|0) REVIEW_MAX_ATTEMPTS=3 ;;
-esac
+REVIEW_ENV_COOLDOWN_STEPS="${REVIEW_ENV_COOLDOWN_STEPS:-60 300 900 3600}"
+REVIEW_RETENTION_DAYS="${REVIEW_RETENTION_DAYS:-30}"
+REVIEW_LOG_MAX_BYTES="${REVIEW_LOG_MAX_BYTES:-1048576}"
+REVIEW_LOG_KEEP="${REVIEW_LOG_KEEP:-3}"
+
+sanitize_count() {
+  local value="$1"
+  local fallback="$2"
+  case "$value" in
+    ''|*[!0-9]*) printf '%s\n' "$fallback" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
+}
+
+# Zero attempts is a valid choice: give up after the first failure.
+REVIEW_MAX_ATTEMPTS="$(sanitize_count "$REVIEW_MAX_ATTEMPTS" 3)"
+REVIEW_RETENTION_DAYS="$(sanitize_count "$REVIEW_RETENTION_DAYS" 30)"
+REVIEW_LOG_MAX_BYTES="$(sanitize_count "$REVIEW_LOG_MAX_BYTES" 1048576)"
+REVIEW_LOG_KEEP="$(sanitize_count "$REVIEW_LOG_KEEP" 3)"
+if [ "$REVIEW_LOG_KEEP" -lt 1 ]; then
+  REVIEW_LOG_KEEP=1
+fi
 
 mkdir -p "$RUNTIME_ROOT/locks" "$RUNTIME_ROOT/completed" \
   "$RUNTIME_ROOT/failures" "$RUNTIME_ROOT/results" \
   "$RUNTIME_ROOT/worktrees" "$LOG_ROOT"
+
+ENVIRONMENT_COOLDOWN_FILE="$RUNTIME_ROOT/environment-cooldown"
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -23,22 +44,155 @@ log_review() {
   printf '%s %s\n' "$(timestamp)" "$*" | tee -a "$LOG_ROOT/reviewer.log"
 }
 
+# A process identity that survives PID reuse: the PID plus its start time.
+process_start_token() {
+  local pid="$1"
+  local started
+  started="$(ps -o lstart= -p "$pid" 2>/dev/null | tr -s '[:space:]' ' ')"
+  started="${started# }"
+  started="${started% }"
+  [ -n "$started" ] || return 1
+  printf '%s\n' "$started"
+}
+
+lock_is_stale() {
+  local lock_dir="$1"
+  local owner stored_pid stored_started current_started
+  [ -f "$lock_dir/owner" ] || return 0
+  owner="$(cat "$lock_dir/owner" 2>/dev/null || true)"
+  stored_pid="${owner%%|*}"
+  stored_started="${owner#*|}"
+  case "$stored_pid" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  kill -0 "$stored_pid" 2>/dev/null || return 0
+  if [ -n "$stored_started" ]; then
+    current_started="$(process_start_token "$stored_pid" 2>/dev/null || true)"
+    if [ -n "$current_started" ] && [ "$current_started" != "$stored_started" ]; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Never report success unless this process actually created the lock directory.
 acquire_lock() {
   local lock_dir="$1"
-  if mkdir "$lock_dir" 2>/dev/null; then
-    printf '%s\n' "$$" > "$lock_dir/pid"
+  local attempt
+  for attempt in 1 2; do
+    if mkdir "$lock_dir" 2>/dev/null; then
+      printf '%s|%s\n' "$$" "$(process_start_token "$$" 2>/dev/null || true)" \
+        > "$lock_dir/owner"
+      return 0
+    fi
+    if ! lock_is_stale "$lock_dir"; then
+      return 1
+    fi
+    rm -rf "$lock_dir" 2>/dev/null || true
+  done
+  return 1
+}
+
+now_epoch() {
+  date '+%s'
+}
+
+# Environment failures (no Codex, no login) are not the reviewed commit's fault.
+# They pause every repository for a growing interval instead of consuming the
+# per-commit attempt budget.
+environment_cooldown_remaining() {
+  local until now remaining
+  if [ ! -f "$ENVIRONMENT_COOLDOWN_FILE" ]; then
+    printf '0\n'
     return 0
   fi
-  local existing_pid=""
-  if [ -f "$lock_dir/pid" ]; then
-    existing_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+  until="$(awk -F= '$1 == "until" { print $2; exit }' "$ENVIRONMENT_COOLDOWN_FILE" 2>/dev/null || true)"
+  until="$(sanitize_count "$until" 0)"
+  now="$(now_epoch)"
+  remaining=$((until - now))
+  if [ "$remaining" -lt 0 ]; then
+    remaining=0
   fi
-  if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
-    return 1
+  printf '%s\n' "$remaining"
+}
+
+# Prints "<failures> <delay_seconds>".
+record_environment_failure() {
+  local reason="$1"
+  local failures delay step index
+  failures=0
+  if [ -f "$ENVIRONMENT_COOLDOWN_FILE" ]; then
+    failures="$(awk -F= '$1 == "failures" { print $2; exit }' "$ENVIRONMENT_COOLDOWN_FILE" 2>/dev/null || true)"
   fi
-  rm -rf "$lock_dir"
-  mkdir "$lock_dir"
-  printf '%s\n' "$$" > "$lock_dir/pid"
+  failures="$(sanitize_count "$failures" 0)"
+  failures=$((failures + 1))
+  index=0
+  delay=60
+  for step in $REVIEW_ENV_COOLDOWN_STEPS; do
+    index=$((index + 1))
+    delay="$(sanitize_count "$step" 60)"
+    if [ "$index" -ge "$failures" ]; then
+      break
+    fi
+  done
+  {
+    printf 'failures=%s\n' "$failures"
+    printf 'until=%s\n' "$(( $(now_epoch) + delay ))"
+    printf 'delay=%s\n' "$delay"
+    printf 'reason=%s\n' "$reason"
+    printf 'since=%s\n' "$(timestamp)"
+  } > "$ENVIRONMENT_COOLDOWN_FILE"
+  printf '%s %s\n' "$failures" "$delay"
+}
+
+clear_environment_failure() {
+  rm -f "$ENVIRONMENT_COOLDOWN_FILE" 2>/dev/null || true
+  return 0
+}
+
+rotate_log_file() {
+  local file="$1"
+  local size index
+  [ -f "$file" ] || return 0
+  size="$(wc -c < "$file" 2>/dev/null | tr -d '[:space:]')"
+  size="$(sanitize_count "$size" 0)"
+  [ "$size" -ge "$REVIEW_LOG_MAX_BYTES" ] || return 0
+  index="$REVIEW_LOG_KEEP"
+  rm -f "$file.$index"
+  while [ "$index" -gt 1 ]; do
+    if [ -f "$file.$((index - 1))" ]; then
+      mv "$file.$((index - 1))" "$file.$index"
+    fi
+    index=$((index - 1))
+  done
+  mv "$file" "$file.1"
+}
+
+rotate_logs() {
+  [ "$REVIEW_LOG_MAX_BYTES" -gt 0 ] || return 0
+  rotate_log_file "$LOG_ROOT/reviewer.log"
+  rotate_log_file "$LOG_ROOT/codex.log"
+}
+
+# The runtime directory is a disposable cache. Every durable record already
+# lives in the owning repository's Git history.
+prune_runtime() {
+  local directory lock
+  for lock in "$RUNTIME_ROOT"/locks/*; do
+    [ -d "$lock" ] || continue
+    if lock_is_stale "$lock"; then
+      rm -rf "$lock" 2>/dev/null || true
+    fi
+  done
+  [ "$REVIEW_RETENTION_DAYS" -gt 0 ] || return 0
+  for directory in completed failures results; do
+    [ -d "$RUNTIME_ROOT/$directory" ] || continue
+    find "$RUNTIME_ROOT/$directory" -maxdepth 1 -type f \
+      -mtime "+$REVIEW_RETENTION_DAYS" -delete 2>/dev/null || true
+  done
+  find "$LOG_ROOT" -maxdepth 1 -type f -name '*.log.[0-9]*' \
+    -mtime "+$REVIEW_RETENTION_DAYS" -delete 2>/dev/null || true
+  return 0
 }
 
 normalize_key() {
@@ -150,5 +304,6 @@ find_codex() {
 
 notify_review() {
   [ "${REVIEW_NOTIFY:-1}" = "1" ] || return 0
+  [ -x /usr/bin/osascript ] || return 0
   /usr/bin/osascript -e "display notification \"$2\" with title \"AI review: $1\"" >/dev/null 2>&1 || true
 }
