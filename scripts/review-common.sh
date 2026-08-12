@@ -75,22 +75,24 @@ lock_is_stale() {
   return 1
 }
 
+claim_lock() {
+  local lock_dir="$1"
+  mkdir "$lock_dir" 2>/dev/null || return 1
+  printf '%s|%s\n' "$$" "$(process_start_token "$$" 2>/dev/null || true)" \
+    > "$lock_dir/owner"
+}
+
 # Never report success unless this process actually created the lock directory.
 acquire_lock() {
   local lock_dir="$1"
-  local attempt
-  for attempt in 1 2; do
-    if mkdir "$lock_dir" 2>/dev/null; then
-      printf '%s|%s\n' "$$" "$(process_start_token "$$" 2>/dev/null || true)" \
-        > "$lock_dir/owner"
-      return 0
-    fi
-    if ! lock_is_stale "$lock_dir"; then
-      return 1
-    fi
-    rm -rf "$lock_dir" 2>/dev/null || true
-  done
-  return 1
+  if claim_lock "$lock_dir"; then
+    return 0
+  fi
+  if ! lock_is_stale "$lock_dir"; then
+    return 1
+  fi
+  rm -rf "$lock_dir" 2>/dev/null || true
+  claim_lock "$lock_dir"
 }
 
 now_epoch() {
