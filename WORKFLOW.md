@@ -1,6 +1,6 @@
 # Shared AI Engineering Workflow
 
-Version: 1.6.0
+Version: 1.8.0
 
 This is the canonical workflow for AI-assisted work in a shared projects
 directory. It is tool-neutral and applies to Codex, Claude Code, and other
@@ -22,12 +22,28 @@ Before acting in a repository:
 
 The shared workflow controls lifecycle and safety. Repository files control
 architecture, commands, deployment details, and stricter project exceptions.
-Project instructions may be stricter but must not silently weaken safety rules.
+Project instructions may be stricter but must not silently weaken safety rules
+or disable the default delivery lifecycle except for a documented technical or
+safety constraint. The user can always explicitly limit delivery for the
+current request.
 
-## Classify work before creating artifacts
+## Classify work by user intent
 
-Use the lightest class that safely fits the request. Do not create specs, plans,
-or reviews merely because a request contains words such as "fix" or "change".
+Default to direct execution. A normal request to change, fix, build, or add
+something authorizes the complete documented delivery lifecycle by default:
+implementation, checks, commit, push, PR, merge, deployment, and production
+verification. The user opts out by explicitly forbidding or limiting delivery.
+Do not create specs, plans, state, reviews, or security audits merely because
+work is multi-file, behavioral, or substantial.
+
+Standalone operational words remain literal when no code or configuration
+change was requested:
+
+- `run` or `continue` means run or continue the existing operation;
+- `commit` means commit the requested changes only;
+- `push` means push the requested branch only;
+- `merge` means merge the requested change only;
+- `deploy` means deploy through the documented project command only.
 
 ### Class A: advisory or diagnostic
 
@@ -39,40 +55,47 @@ or status and has not asked for a change.
 - Do not mutate code, external systems, Git history, or production.
 - If the diagnosis reveals a fix, explain it; implement only when requested.
 
-### Class B: small safe change
+### Class B: direct execution (default)
 
-Use only when all of the following are true:
+Use for every requested change or operation that is not an explicitly requested
+new feature and does not cross a stop-and-ask safety boundary. Size, file count,
+and behavioral impact alone do not promote work to Class C.
 
-- The desired result is clear and localized.
-- The change is easy to review and reverse.
-- It does not alter authentication, authorization, secrets, dependencies,
-  database schema, public API contracts, production configuration, deployment,
-  scheduled jobs, or external-system behavior.
-- It does not delete data/files or require a product decision.
-
-Examples: copy change, a narrow UI adjustment, a local validation fix, a test
-expectation correction, or a small non-public refactor required by the fix.
+Examples include bug fixes, maintenance, refactors, UI changes, existing-script
+work, operational commands, branch cleanup, and explicit commit/push/merge/
+deploy requests.
 
 Workflow:
 
 1. Inspect the affected code and working tree.
-2. State the intended small change briefly; no spec or plan file is required.
+2. State the intended action briefly; no workflow artifact is required.
 3. Implement only the requested scope.
 4. Run relevant project checks and `git diff --check`.
-5. Self-review the actual diff and fix non-controversial findings.
-6. Report outcome, checks, files, and residual risk.
+5. Inspect the actual diff or result for obvious mistakes.
+6. Complete the repository's documented delivery lifecycle through production
+   deployment and verification unless the user explicitly opts out.
+7. Report outcome, checks, files, delivery state, and residual risk.
 
-Do not create `.ai/specs`, `.ai/plans`, or `.ai/reviews` artifacts for Class B.
-Commit or push only when the user requested it or `.ai/project.md` explicitly
-authorizes automatic delivery for small changes.
+Do not create `.ai/specs`, `.ai/plans`, `.ai/reviews`, or `.ai/state` artifacts
+for Class B. Do not start an external reviewer or security cycle. A requested
+change includes automatic commit, push, PR, merge, and documented deployment;
+skip only stages that do not exist for that repository or that the user has
+explicitly prohibited.
 
-If any Class B condition stops being true, reclassify as Class C before making
-the risky or broad change.
+### Class C: explicit new feature or governed work
 
-### Class C: governed feature or risky change
+Use only when one of these is true:
 
-Use for new features, multi-file behavioral changes, ambiguous work, broad
-refactors, and anything involving a gate listed under "Stop and ask first".
+- the user explicitly asks to create, build, or add a new feature;
+- the user explicitly requests a plan, governed workflow, independent review,
+  security audit, or full delivery lifecycle;
+- the work crosses a stop-and-ask boundary such as destructive data changes,
+  authentication/authorization, secrets, dependencies, schema, public API,
+  production configuration, infrastructure, or scheduling.
+
+Do not use Class C merely because a fix is broad, touches many files, changes
+behavior, or needs careful implementation. If classification is genuinely
+ambiguous, prefer Class B unless a stop-and-ask boundary is involved.
 
 #### Plan phase: one approval question
 
@@ -95,11 +118,17 @@ is sufficient; do not ask for duplicate approval.
    `NOT_RUN`, never `PASSED`.
 5. Write `.ai/reviews/YYYY-MM-DD-slug-self-review.md`.
 6. Automatically fix non-controversial self-review findings and rerun checks.
-7. Commit the completed implementation when project policy allows it.
-8. Set state to `waiting_for_external_review` and record the exact commit SHA in
+7. For an explicit new feature or requested independent review, commit the
+   completed implementation locally so an exact SHA can be reviewed.
+8. When independent review is required, set state to
+   `waiting_for_external_review` and record the exact commit SHA in
    `implementation_commit`. State is never committed; see "Retention".
 
 #### External review phase
+
+Run this phase only for an explicitly requested new feature, when the user asks
+for review/audit/full lifecycle, or when an approved plan explicitly requires
+it. Never trigger it for Class B work.
 
 - Review a committed SHA, not an uncommitted implementation.
 - Prefer a fresh session/model that did not build the feature. The optional
@@ -159,23 +188,22 @@ review was already recorded.
 
 #### Delivery phase
 
-- Approval to implement a requested change authorizes its complete delivery
-  lifecycle after all required checks and reviews pass: commit, push, PR
-  creation, merge, and production deployment. Do not ask separate PR, merge,
-  or deployment approval questions unless the user explicitly limited the task
-  to an earlier stage.
-- For Class C work, create and merge the PR automatically only after external
-  review returns `APPROVED` or `APPROVED_WITH_NOTES` and no required finding
-  remains open.
-- After every successful merge, deploy automatically unless the user explicitly
-  says not to deploy. If the repository has no documented deploy command, report
-  deployment as unavailable rather than inventing one.
-- A standalone production deployment that does not follow an authorized merge
-  still requires explicit approval.
-- Use only the repository's documented deploy command.
-- Run the documented smoke check and record the deployed commit.
-- Reset `.ai/state/current.md` to the empty template once the feature is
-  deployed. Do not copy it anywhere; see "Retention".
+- Approval to implement a change authorizes its complete documented delivery
+  lifecycle through production verification unless the user explicitly opts
+  out of one or more stages.
+- Commit the scoped change, push its branch, create the PR, merge after required
+  checks/reviews pass, and deploy automatically when those mechanisms exist.
+- Never include unrelated dirty work in a commit or deployment. Use a clean
+  worktree or another repository-documented isolation mechanism when needed.
+- Use only the repository's documented deploy command. If none exists, report
+  deployment as blocked instead of inventing one.
+- A failed check, review, merge, deployment, or smoke test stops the lifecycle;
+  diagnose and safely repair it when possible, otherwise report the blocker.
+- Standalone requests such as `commit`, `push`, `merge`, or `deploy`, without an
+  accompanying change request, authorize only the named operation.
+- After the final delivery stage completes, reset
+  `.ai/state/current.md` to the empty template. Do not copy it anywhere; see
+  "Retention".
 
 ## Retention
 
@@ -258,20 +286,19 @@ Even after plan approval, stop before:
 - destructive migrations, schema rebuilds, data deletion, or history rewrite;
 - authentication, authorization, permissions, credentials, or secrets changes;
 - adding, removing, or upgrading dependencies;
-- production configuration, DNS, deployment, scheduler, or infrastructure work;
+- production configuration, DNS, scheduler, or infrastructure changes outside
+  the repository's already documented deployment procedure;
 - public/consumed API or persisted-schema changes not explicitly approved;
 - external messages, purchases, irreversible writes, or broad side effects;
 - broad refactors outside approved scope;
-- PR creation, merge, and the documented post-merge deployment are authorized
-  by approval to implement unless the user explicitly restricted delivery;
-- standalone deployment unless explicitly requested; deployment immediately
-  following an authorized merge is already authorized by the delivery policy;
+- a delivery step that would bypass required checks, branch protection, or the
+  repository's documented deployment procedure;
 - any unresolved user-visible product decision.
 
 An approved spec may explicitly authorize a schema, API, dependency, or config
 change. It does not implicitly authorize destructive operations or an unrelated
-standalone production deployment. Approval to implement includes the normal
-post-review PR, merge, and deployment lifecycle defined above.
+production/data mutation. Approval to implement does include the normal scoped
+push, PR, merge, deployment, and verification lifecycle defined above.
 
 ## Git and worktree safety
 
@@ -286,10 +313,15 @@ post-review PR, merge, and deployment lifecycle defined above.
 ## Security and production data
 
 - Never commit `.env`, credentials, tokens, private keys, or production exports.
+- Do not start a security audit or security-review cycle for ordinary work.
+  Run one only when the user asks for it or the requested change directly
+  affects authentication, authorization, permissions, credentials, secrets, or
+  another explicitly security-sensitive boundary.
 - Use read-only, minimum-data production inspection during diagnosis/review.
 - Do not place customer PII or raw production rows in AI workflow artifacts.
 - Sanitize logs, screenshots, fixtures, and review evidence.
-- Production writes must be intentional, scoped, and explicitly authorized.
+- Production writes must be intentional and scoped. A user-requested change
+  authorizes its normal documented deployment, but not unrelated data mutation.
 
 ## External design tools are opt-in only
 
@@ -311,7 +343,7 @@ post-review PR, merge, and deployment lifecycle defined above.
 - Do not invent commands. If required verification is unavailable, record the
   gap and its consequence.
 - Every final implementation report states: outcome, checks with true results,
-  commit/branch when applicable, residual risk, and the next approval if any.
+  commit/branch and deployment when applicable, residual risk, and any blocker.
 
 ## Project-local artifacts
 

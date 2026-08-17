@@ -63,8 +63,10 @@ Always read `.ai/project.md` for repository-specific commands and constraints.
 Keep specs, plans, reviews, and workflow state inside this repository's `.ai/`.
 
 If the shared workflow is unavailable, preserve user changes, use the lightest
-safe workflow, require a plan approval for features or risky changes, run the
-documented checks, and require explicit approval before PR, merge, or deploy.
+safe workflow, require plan approval for explicit new features or safety-boundary
+changes, and run the documented checks. Then automatically commit, push, create
+and merge the PR, deploy, and verify production unless the user explicitly opts
+out.
 EOF
   WORKFLOW_PATH="$SHARED_ROOT/WORKFLOW.md" \
     perl -0pi -e 's/__WORKFLOW_PATH__/$ENV{WORKFLOW_PATH}/g' "$REPO_ROOT/AGENTS.md"

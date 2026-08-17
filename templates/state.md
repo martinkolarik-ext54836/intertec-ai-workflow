@@ -1,6 +1,6 @@
 # Current AI Workflow State
 
-workflow_version: 1.6.0
+workflow_version: 1.8.0
 feature_slug:
 class: C
 status: spec_created

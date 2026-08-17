@@ -13,3 +13,8 @@ repository that owns the code.
 Never overwrite or discard unrelated dirty worktree changes. More specific
 project instructions may add constraints but must not silently weaken shared
 safety, secret, production, or approval gates.
+
+A request to change, fix, build, or add something authorizes the complete
+documented delivery lifecycle through production verification unless the user
+explicitly opts out. Standalone operational commands remain literal when no
+change is requested.

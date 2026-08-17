@@ -4,10 +4,10 @@ A tool-neutral workflow for using coding agents safely across multiple Git
 repositories. It supports Codex, Claude Code, and other agents that can read
 repository instruction files.
 
-The workflow separates small work from risky features, keeps project knowledge
-inside each project, preserves dirty worktrees, records real verification
-results, and can optionally run an independent Codex review in a disposable Git
-worktree.
+The workflow defaults to direct execution, reserves governed artifacts for
+explicit new features and safety-boundary work, keeps project knowledge inside
+each project, preserves dirty worktrees, and can optionally run an independent
+Codex review in a disposable Git worktree.
 
 ## What to share
 
@@ -126,20 +126,25 @@ At the beginning of work, the agent reads:
 4. `<project>/.ai/state/current.md` only when continuing an active governed
    feature.
 
-Work is classified into three levels:
+Work is classified into three levels by user intent:
 
 | Class | Use for | Required process |
 |---|---|---|
 | A | Questions, inspection, diagnosis | Read-only investigation and answer |
-| B | Clear, localized, low-risk changes | Implement, run relevant checks, self-review |
-| C | Features, risky or broad changes | Spec, plan approval, implementation, checks, independent review, delivery |
+| B | Requested changes and operations (default) | Implement, check, and automatically complete documented delivery through production unless the user opts out |
+| C | Explicit new features, requested governance/review, or safety-boundary work | Spec, plan approval, implementation, checks, and review when required |
 
-For Class C, the normal lifecycle is:
+For an explicitly requested new feature, the normal lifecycle is:
 
 ```text
-request → spec/plan → one approval → implementation → self-review
-→ committed SHA → independent review → PR/merge → deployment → state reset
+request → spec/plan → one approval → implementation → checks
+→ committed SHA → independent review → automatic delivery and verification
 ```
+
+A requested change authorizes commit, push, PR, merge, deployment, and
+production verification by default. The user can explicitly prohibit or limit
+delivery. Standalone operational commands remain literal when no change is
+requested.
 
 The agent must record unavailable checks as `NOT_RUN`, preserve unrelated user
 changes, avoid committing secrets or production data, and never claim that a

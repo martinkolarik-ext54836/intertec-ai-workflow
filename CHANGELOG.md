@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.0 — 2026-08-17
+
+- Made full documented delivery the default for requested changes across all
+  projects: commit, push, PR, merge, deployment, and production verification.
+- Added an explicit opt-out: delivery pauses only when the user forbids or
+  limits it, or when checks, safety gates, or documented deployment mechanisms
+  block progress.
+- Kept standalone operational commands literal and retained destructive-data,
+  secrets, infrastructure, and unrelated-production-write safety boundaries.
+
+## 1.7.0 - 2026-08-13
+
+- Made direct execution the default for ordinary changes, maintenance,
+  existing-script operations, and literal Git/delivery commands.
+- Restricted governed artifacts and automatic independent review to explicit
+  new features, explicit governance/review requests, and safety-boundary work.
+- Removed implied commit, push, PR, merge, and deployment authorization from
+  implementation approval; each delivery stage is now explicit.
+- Disabled automatic post-merge deployment in the default project template.
+- Limited security cycles to explicit audits or directly security-sensitive
+  changes.
+
 ## 1.6.0 - 2026-08-12
 
 - Stopped versioning workflow artifacts. Specs, plans, reviews, and state are

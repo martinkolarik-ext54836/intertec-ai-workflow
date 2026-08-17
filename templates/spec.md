@@ -3,7 +3,7 @@
 Status: spec_created
 Original request: <summary>
 Branch: <branch>
-Workflow version: 1.3.0
+Workflow version: 1.8.0
 
 ## Objective
 

@@ -2,7 +2,7 @@
 
 Project: <name>
 Repository: <remote or local path>
-Workflow version: 1.6.0
+Workflow version: 1.8.0
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Workflow version: 1.6.0
 # Discover from repository documentation before use.
 # full check
 # Discover from repository documentation before use.
-# deploy (automatic after an authorized merge; standalone use requires approval)
+# deploy (automatic after a successful requested change unless explicitly forbidden)
 # Discover from repository documentation before use.
 ```
 
@@ -28,12 +28,12 @@ Workflow version: 1.6.0
 ## Delivery Policy
 
 - Feature branch required: yes
-- Auto-commit after approved Class C implementation: yes
+- Auto-commit after successful implementation: yes
 - Auto-push feature branch: yes
-- PR requires explicit approval: yes
-- Merge requires explicit approval: yes
-- Deploy automatically after an authorized merge: yes
-- Standalone deployment requires explicit approval: yes
+- Auto-create PR after successful checks/review: yes
+- Auto-merge after required checks/review: yes
+- Auto-deploy after merge: yes
+- A user may explicitly forbid or limit delivery: yes
 
 ## Production And Data Safety
 
